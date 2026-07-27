@@ -12,11 +12,9 @@ import structlog
 from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from ai_providers.errors import ProviderError
+
 logger = structlog.get_logger()
-
-
-class ProviderError(Exception):
-    """A provider call failed after bounded retries."""
 
 
 class CreatedOrganization(BaseModel):

@@ -30,7 +30,8 @@ from ai_database.models import (
     UsageRecord,
 )
 from ai_database.repositories import AdminContext
-from ai_providers.auth import AuthenticationProvider, ProviderError
+from ai_providers.auth import AuthenticationProvider
+from ai_providers.errors import ProviderError
 from ai_shared.errors import ConflictError, NotFoundError, ValidationFailedError
 from sqlalchemy import Select, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
