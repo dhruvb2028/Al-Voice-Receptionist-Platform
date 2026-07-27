@@ -30,6 +30,12 @@ from api.schemas.admin_tenants import (
 )
 from api.services import tenant_admin
 from api.services.calls import CallDetail, CallListFilters, CallListPage, call_detail, list_calls
+from api.services.metrics import (
+    PlatformOverview,
+    TenantOverview,
+    platform_overview,
+    tenant_overview,
+)
 from api.settings import get_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -171,6 +177,29 @@ async def begin_testing(
         session, tenant_id=tenant_id, target=TenantStatus.TESTING, context=context
     )
     return LifecycleActionResponse(id=tenant.id, status=tenant.status.value)
+
+
+@router.get("/overview")
+async def read_platform_overview(
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PlatformOverview:
+    """Fleet-wide health: tenants, live calls, failures, usage, and the
+    operational warnings that need someone to act."""
+    return await platform_overview(session)
+
+
+@router.get("/tenants/{tenant_id}/overview")
+async def read_tenant_overview(
+    tenant_id: uuid.UUID,
+    repo: Annotated[AdminRepository, Depends(_repo)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    window_days: int = Query(default=30, ge=1, le=365),
+) -> TenantOverview:
+    """One tenant's dashboard metrics, as the client sees them."""
+    if await repo.get_tenant(tenant_id) is None:
+        raise NotFoundError("Tenant not found.")
+    return await tenant_overview(session, tenant_id, window_days=window_days)
 
 
 # --- Call inspection (admin-expanded view) -----------------------------------

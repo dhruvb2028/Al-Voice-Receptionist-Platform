@@ -314,3 +314,69 @@ export interface MessageListPage {
   page: number;
   page_size: number;
 }
+
+// --- Overview metrics (mirror api/services/metrics.py) ----------------------
+
+export interface SeriesPoint {
+  label: string;
+  value: number;
+}
+
+export interface RevenueEstimate {
+  amount_cents: number;
+  bookings_counted: number;
+  average_job_value_cents: number;
+  is_estimate: boolean;
+}
+
+export interface OverviewMetrics {
+  window_days: number;
+  calls_answered: number;
+  calls_after_hours: number;
+  appointments_booked: number;
+  messages_captured: number;
+  calls_transferred: number;
+  calls_failed: number;
+  containment_rate: number | null;
+  average_call_seconds: number | null;
+  latency_p50_ms: number | null;
+  latency_p95_ms: number | null;
+  minutes_this_month: number;
+  estimated_cost_cents: number;
+  recovered_revenue: RevenueEstimate | null;
+}
+
+export interface OverviewSeries {
+  calls_over_time: SeriesPoint[];
+  outcomes: SeriesPoint[];
+  calls_by_hour: SeriesPoint[];
+  bookings_over_time: SeriesPoint[];
+  urgency_distribution: SeriesPoint[];
+  latency_trend: SeriesPoint[];
+  usage_trend: SeriesPoint[];
+}
+
+export interface TenantOverview {
+  metrics: OverviewMetrics;
+  series: OverviewSeries;
+}
+
+export interface TenantWarning {
+  tenant_id: string;
+  tenant_name: string;
+  code: string;
+  message: string;
+}
+
+export interface PlatformOverview {
+  active_tenants: number;
+  tenants_by_status: SeriesPoint[];
+  active_calls: number;
+  failed_calls_today: number;
+  calls_today: number;
+  minutes_this_month: number;
+  estimated_cost_cents: number;
+  calendar_connection_failures: number;
+  provider_errors_today: SeriesPoint[];
+  readiness_warnings: TenantWarning[];
+}

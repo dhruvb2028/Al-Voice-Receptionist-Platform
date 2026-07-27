@@ -46,6 +46,7 @@ from api.services.client_records import (
     set_message_note,
     set_message_reviewed,
 )
+from api.services.metrics import TenantOverview, tenant_overview
 from api.settings import get_settings
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
@@ -56,11 +57,6 @@ class TenantView(BaseModel):
     name: str
     status: str
     timezone: str
-
-
-class UsageView(BaseModel):
-    tenant_id: uuid.UUID
-    note: str
 
 
 def call_filters(
@@ -259,13 +255,26 @@ async def recording_url(
     return RecordingUrlResponse(url=url, expires_seconds=900)
 
 
+@router.get("/overview")
+async def read_overview(
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    window_days: int = Query(default=30, ge=1, le=365),
+) -> TenantOverview:
+    """Headline metrics and chart series for the tenant dashboard."""
+    assert principal.tenant_id is not None
+    return await tenant_overview(session, principal.tenant_id, window_days=window_days)
+
+
 @router.get("/usage")
 async def read_usage(
     principal: Annotated[Principal, Depends(require_client_owner)],
-) -> UsageView:
-    # Owner-only surface; real aggregation arrives with the usage milestone.
+    session: Annotated[AsyncSession, Depends(get_session)],
+    window_days: int = Query(default=30, ge=1, le=365),
+) -> TenantOverview:
+    """Owner-only usage view — same computation, narrower audience."""
     assert principal.tenant_id is not None
-    return UsageView(tenant_id=principal.tenant_id, note="usage reporting arrives later")
+    return await tenant_overview(session, principal.tenant_id, window_days=window_days)
 
 
 # --- Bookings and messages ---------------------------------------------------

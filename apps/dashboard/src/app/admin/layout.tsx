@@ -18,7 +18,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </Link>
           <p className="mt-0.5 text-xs text-muted-foreground">Platform admin</p>
         </div>
-        <nav aria-label="Admin navigation" className="px-2">
+        <nav aria-label="Admin navigation" className="space-y-0.5 px-2">
+          <Link
+            href="/admin/overview"
+            className="block rounded-md px-2 py-1.5 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted"
+          >
+            Overview
+          </Link>
           <Link
             href="/admin/tenants"
             className="block rounded-md px-2 py-1.5 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted"

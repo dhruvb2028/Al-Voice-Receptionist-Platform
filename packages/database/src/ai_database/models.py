@@ -151,6 +151,9 @@ class TenantConfig(TimestampMixin, Base):
     recording_retention_days: Mapped[int | None] = mapped_column(Integer)
     #: where post-call notifications are emailed (None -> none sent)
     notification_email: Mapped[str | None] = mapped_column(String(200))
+    # Tenant-supplied average job value. Without it the dashboard shows no
+    # recovered-revenue figure at all — the platform never invents one.
+    average_job_value_cents: Mapped[int | None] = mapped_column(BigInteger)
     escalation_number: Mapped[str | None] = mapped_column(String(20))
     max_call_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=900)
     timezone: Mapped[str | None] = mapped_column(String(64))
@@ -180,6 +183,10 @@ class TenantConfig(TimestampMixin, Base):
         CheckConstraint(
             "escalation_number IS NULL OR escalation_number ~ '^\\+[1-9][0-9]{6,14}$'",
             name="escalation_number_e164",
+        ),
+        CheckConstraint(
+            "average_job_value_cents IS NULL OR average_job_value_cents >= 0",
+            name="average_job_value_non_negative",
         ),
     )
 
