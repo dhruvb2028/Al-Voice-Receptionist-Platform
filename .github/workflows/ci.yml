@@ -48,6 +48,20 @@ jobs:
       - name: Pytest
         run: uv run pytest -q
 
+      # Exit 2 means a safety property regressed; exit 1 is a quality
+      # failure. Both fail the build, but the code distinguishes them in
+      # the log and lets the report be read before triage.
+      - name: Evaluation suite
+        run: uv run python -m ai_evals.cli --require-coverage --out eval-results
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval-results/
+          if-no-files-found: ignore
+
   dashboard:
     name: Dashboard — lint, typecheck, build
     runs-on: ubuntu-latest

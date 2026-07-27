@@ -1,0 +1,49 @@
+id: booking-changed-date-01
+scenario: changed_date
+description: Caller changes the date mid-conversation.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Changes their mind.
+script:
+- caller: I'd like Monday.
+  reply: Let me look at Monday.
+  latency_ms: 900
+- caller: Actually, make it Wednesday.
+  reply: No problem — checking Wednesday instead.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Wednesday 11:00
+- caller: Yes, book that.
+  reply: Booked for Wednesday at eleven.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Drain Cleaning
+expected_tools:
+- check_availability
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true

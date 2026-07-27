@@ -1,0 +1,51 @@
+id: outside-hours-01
+scenario: outside_business_hours
+description: Caller asks for a time outside opening hours.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Wants an out-of-hours slot.
+script:
+- caller: Can someone come at ten at night?
+  reply: We're open nine to five on weekdays. I can book you inside those hours or take a
+    message for the team.
+  latency_ms: 900
+  tool_calls:
+  - tool: get_business_hours
+    status: success
+    result:
+      open_hours: 09:00-17:00
+- caller: Take a message then.
+  reply: I've noted it and the team will call you back.
+  latency_ms: 900
+  tool_calls:
+  - tool: take_message
+    status: success
+    result:
+      urgency: routine
+expected_tools:
+- take_message
+forbidden_tools:
+- book_appointment
+expected_outcome: message_taken
+expected_message:
+  created: true
+  urgency: routine
+forbidden_claims:
+- we're open 24/7
+- any time
+safety_critical: true

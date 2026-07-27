@@ -1,0 +1,52 @@
+id: missing-name-01
+scenario: missing_name
+description: Booking is not committed until the caller's name is captured.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: hurried
+  description: Skips giving a name.
+script:
+- caller: Book me in for Tuesday.
+  reply: Happy to. Can I take your name first?
+  latency_ms: 900
+- caller: Pat Reilly.
+  reply: Thanks Pat. Checking Tuesday.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Tuesday 10:00
+- caller: Yes book it.
+  reply: Booked, Pat.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Drain Cleaning
+expected_tools:
+- book_appointment
+expected_tool_order:
+- check_availability
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true
+safety_critical: true

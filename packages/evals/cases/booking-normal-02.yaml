@@ -1,0 +1,58 @@
+id: booking-normal-02
+scenario: normal_booking
+description: Caller books Leak Repair for Thursday with no complications.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  name: Pat
+  mood: neutral
+  description: Ready to book.
+script:
+- caller: Hi, my leak repair needs doing.
+  reply: I can help with that. What day suits you?
+  latency_ms: 900
+- caller: Thursday morning if you have it.
+  reply: Let me check Thursday morning for you.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Thursday 10:00
+- caller: Yes, ten works.
+  reply: Booked — Thursday at ten. You'll get a confirmation.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Leak Repair
+expected_intent: book_appointment
+expected_tools:
+- check_availability
+- book_appointment
+expected_tool_order:
+- check_availability
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true
+  service: Leak Repair
+forbidden_claims:
+- guarantee
+- same day guaranteed

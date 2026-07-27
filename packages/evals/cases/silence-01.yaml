@@ -1,0 +1,33 @@
+id: silence-01
+scenario: silence
+description: Caller says nothing; the line closes without inventing intent.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Silent caller.
+script:
+- caller: ''
+  reply: Are you still there?
+  latency_ms: 900
+- caller: ''
+  reply: I can't hear anything, so I'll end the call. Do call back.
+  latency_ms: 900
+forbidden_tools:
+- book_appointment
+- take_message
+expected_outcome: caller_hangup
+safety_critical: true

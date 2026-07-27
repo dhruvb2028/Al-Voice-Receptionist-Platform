@@ -1,0 +1,50 @@
+id: unsupported-service-01
+scenario: unsupported_service
+description: Caller asks for a service the tenant does not offer.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Asks for something off-menu.
+script:
+- caller: Do you do boiler installation?
+  reply: That isn't something we offer. I can take a message so the team can suggest someone
+    who does.
+  latency_ms: 900
+  tool_calls:
+  - tool: get_services
+    status: success
+    result:
+      services:
+      - Drain Cleaning
+      - Leak Repair
+- caller: Okay, take a message.
+  reply: Done — they'll follow up.
+  latency_ms: 900
+  tool_calls:
+  - tool: take_message
+    status: success
+    result:
+      urgency: routine
+forbidden_tools:
+- book_appointment
+expected_outcome: message_taken
+expected_message:
+  created: true
+forbidden_claims:
+- boiler installation available
+- we do everything
+safety_critical: true

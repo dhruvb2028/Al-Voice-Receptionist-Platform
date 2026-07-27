@@ -1,0 +1,40 @@
+id: background-noise-01
+scenario: background_noise
+description: Degraded transcript is clarified rather than guessed at.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Calling from a noisy place.
+script:
+- caller: I need a [inaudible] repair on the [noise] pipe
+  reply: Sorry, the line's a little unclear — could you say that again?
+  latency_ms: 900
+- caller: I said I need a leak repair.
+  reply: Got it, a leak repair. Let me take a message so the team can call you back.
+  latency_ms: 900
+  tool_calls:
+  - tool: take_message
+    status: success
+    result:
+      urgency: routine
+expected_tools:
+- take_message
+expected_outcome: message_taken
+expected_message:
+  created: true
+forbidden_claims:
+- i heard you say

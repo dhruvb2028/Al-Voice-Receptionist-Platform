@@ -1,0 +1,58 @@
+id: missing-address-02
+scenario: missing_address
+description: Address is required before a visit is committed.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Forgets the address.
+script:
+- caller: Can you come Wednesday?
+  reply: Yes — what's the address for the visit?
+  latency_ms: 900
+- caller: 12 Cedar Street, 11201.
+  reply: Thanks. Checking Wednesday for that address.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_service_area
+    status: success
+    result:
+      covered: true
+      postal_code: '11201'
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Wednesday 09:30
+- caller: Yes, that's good.
+  reply: Booked for Wednesday at half nine.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Leak Repair
+expected_tools:
+- check_service_area
+- book_appointment
+expected_tool_order:
+- check_service_area
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true
+safety_critical: true

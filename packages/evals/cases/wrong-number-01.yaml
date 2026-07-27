@@ -1,0 +1,29 @@
+id: wrong-number-01
+scenario: wrong_number
+description: Wrong number ends politely with no records created.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: confused
+  description: Dialled the wrong business.
+script:
+- caller: Is this the dentist?
+  reply: This is Ace Plumbing — sounds like a wrong number. Take care.
+  latency_ms: 900
+forbidden_tools:
+- book_appointment
+- take_message
+expected_outcome: caller_hangup

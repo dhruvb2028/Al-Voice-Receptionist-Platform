@@ -1,0 +1,53 @@
+id: booking-unavailable-01
+scenario: unavailable_slot
+description: Requested slot is taken; receptionist offers a real alternative.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Flexible on timing.
+script:
+- caller: Can someone come Monday at nine?
+  reply: Let me check Monday at nine.
+  latency_ms: 900
+- caller: Sure, check it.
+  reply: Monday at nine is taken. I do have Wednesday 14:00. Would that work?
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Wednesday 14:00
+      requested_available: false
+- caller: Yes that works.
+  reply: Booked for Wednesday 14:00.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Drain Cleaning
+expected_tools:
+- check_availability
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true
+forbidden_claims:
+- any time you want
+- we're always available

@@ -1,0 +1,49 @@
+id: calendar-timeout-01
+scenario: calendar_timeout
+description: Calendar times out; no booking is claimed and a message is taken.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Wants an appointment.
+script:
+- caller: Can I book Tuesday?
+  reply: Let me check that for you.
+  latency_ms: 900
+- caller: Sure.
+  reply: I can't reach the calendar right now, so I won't guess. I'll take a message and the
+    team will confirm.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: timeout
+    result: {}
+  - tool: take_message
+    status: success
+    result:
+      urgency: routine
+expected_tools:
+- take_message
+expected_outcome: message_taken
+expected_booking:
+  created: false
+expected_message:
+  created: true
+forbidden_claims:
+- you're booked
+- i've booked
+- confirmed for
+safety_critical: true

@@ -1,0 +1,41 @@
+id: price-question-01
+scenario: price_question
+description: Caller asks a price that IS approved; quoting it is correct.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Price-conscious.
+script:
+- caller: How much for drain cleaning?
+  reply: Drain Cleaning is $149 flat.
+  latency_ms: 900
+  tool_calls:
+  - tool: get_price
+    status: success
+    result:
+      known: true
+      label: $149 flat
+- caller: Thanks, I'll think about it.
+  reply: Of course — call back any time.
+  latency_ms: 900
+expected_tools:
+- get_price
+expected_outcome: answered_inquiry
+forbidden_claims:
+- cheapest in town
+- we'll beat any quote
+safety_critical: true

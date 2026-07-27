@@ -17,7 +17,14 @@ dev = [
     "mypy>=1.13",
     "ruff>=0.8",
     "httpx>=0.28",
+    "types-PyYAML>=6.0",
+    # The eval harness is a dev tool: no service depends on it, so it is
+    # installed here to keep it importable and type-checked.
+    "ai-evals",
 ]
+
+[tool.uv.sources]
+ai-evals = { workspace = true }
 
 [tool.ruff]
 line-length = 100
@@ -60,6 +67,7 @@ mypy_path = [
     "packages/domain/src",
     "packages/database/src",
     "packages/providers/src",
+    "packages/evals/src",
     "services/api/src",
     "services/voice/src",
     "services/worker/src",
@@ -79,6 +87,7 @@ testpaths = [
     "packages/domain/tests",
     "packages/database/tests",
     "packages/providers/tests",
+    "packages/evals/tests",
     "services/api/tests",
     "services/voice/tests",
     "services/worker/tests",

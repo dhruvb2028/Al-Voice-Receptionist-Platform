@@ -1,0 +1,49 @@
+id: booking-changed-service-01
+scenario: changed_service
+description: Caller switches which service they need.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Reconsiders the job.
+script:
+- caller: I need drain cleaning.
+  reply: Understood. When would suit?
+  latency_ms: 900
+- caller: Wait — it's really leak repair.
+  reply: Thanks for clarifying, Leak Repair it is. Let me check availability.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Thursday 13:00
+- caller: Book it please.
+  reply: Booked for Thursday at one.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Leak Repair
+expected_tools:
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true
+  service: Leak Repair

@@ -1,0 +1,49 @@
+id: rambling-01
+scenario: rambling_caller
+description: Long unfocused caller is guided to a concrete outcome.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: confused
+  description: Talks at length.
+script:
+- caller: So my sister said, and this was back in March, that the pipe under the thing, you
+    know the one by the garden, well anyway it's been dripping
+  reply: Let me make sure I've got it — is it a leak you need looking at?
+  latency_ms: 900
+- caller: Yes, that's it.
+  reply: Thanks. Let me check when we can come.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Tuesday 10:00
+- caller: Yes please book it.
+  reply: Booked for Tuesday at ten.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Leak Repair
+expected_tools:
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true

@@ -1,0 +1,51 @@
+id: outside-area-02
+scenario: outside_service_area
+description: Caller is outside the tenant's service area.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Out-of-area caller.
+script:
+- caller: I'm in 10001, can you come out?
+  reply: That's outside the area we cover. I can take a message so the team can point you
+    somewhere closer.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_service_area
+    status: success
+    result:
+      covered: false
+      postal_code: '10001'
+- caller: Alright, please do.
+  reply: Noted — someone will be in touch.
+  latency_ms: 900
+  tool_calls:
+  - tool: take_message
+    status: success
+    result:
+      urgency: routine
+expected_tools:
+- check_service_area
+forbidden_tools:
+- book_appointment
+expected_outcome: message_taken
+expected_message:
+  created: true
+forbidden_claims:
+- we cover everywhere
+- we service all areas
+safety_critical: true

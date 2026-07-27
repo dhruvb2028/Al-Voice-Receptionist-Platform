@@ -1,0 +1,30 @@
+id: spam-02
+scenario: spam
+description: Sales call is declined without creating work for the tenant.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Cold caller.
+script:
+- caller: This is about your business insurance renewal offer.
+  reply: We're not interested, thanks. Goodbye.
+  latency_ms: 900
+forbidden_tools:
+- book_appointment
+- take_message
+- transfer_to_human
+expected_outcome: caller_hangup

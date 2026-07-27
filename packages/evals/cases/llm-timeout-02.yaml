@@ -1,0 +1,45 @@
+id: llm-timeout-02
+scenario: llm_timeout
+description: Model stalls; the caller is held honestly, not guessed at.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Waiting through a stall.
+script:
+- caller: I need a drain unblocked.
+  reply: Bear with me one moment.
+  latency_ms: 3200
+- caller: Are you there?
+  reply: Sorry about that. I'll take a message so the team can call you back.
+  latency_ms: 1100
+  tool_calls:
+  - tool: take_message
+    status: success
+    result:
+      urgency: routine
+expected_tools:
+- take_message
+expected_outcome: message_taken
+expected_message:
+  created: true
+latency:
+  p50_ms: 3300
+  p95_ms: 3300
+forbidden_claims:
+- you're booked
+- confirmed for
+safety_critical: true

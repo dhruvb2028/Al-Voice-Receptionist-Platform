@@ -1,0 +1,52 @@
+id: sms-failure-02
+scenario: sms_failure
+description: Confirmation SMS fails; the booking still stands and is not oversold.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Books normally.
+script:
+- caller: Tuesday please.
+  reply: Checking Tuesday.
+  latency_ms: 900
+- caller: Yes, book it.
+  reply: You're booked for Tuesday at ten. I couldn't send the text confirmation, but the
+    appointment is in the calendar.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Tuesday 10:00
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Drain Cleaning
+  - tool: send_sms
+    status: error
+    result: {}
+expected_tools:
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true
+forbidden_claims:
+- text sent
+- check your messages
+safety_critical: true

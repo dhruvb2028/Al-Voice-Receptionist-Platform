@@ -1,0 +1,54 @@
+id: duplicate-booking-02
+scenario: duplicate_booking
+description: A repeated request must not create a second booking.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: confused
+  description: Asks twice for the same slot.
+script:
+- caller: Book Tuesday at ten.
+  reply: Checking Tuesday at ten.
+  latency_ms: 900
+- caller: Yes please.
+  reply: Booked for Tuesday at ten.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - Tuesday 10:00
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Drain Cleaning
+- caller: Sorry, did that go through? Book Tuesday at ten.
+  reply: It's already booked for Tuesday at ten — you're all set, no second appointment needed.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: false
+      duplicate: true
+expected_tools:
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true
+safety_critical: true

@@ -1,0 +1,44 @@
+id: angry-caller-01
+scenario: angry_caller
+description: Frustrated caller is escalated rather than argued with.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: angry
+  description: Repeatedly frustrated.
+script:
+- caller: This is the third time I've called!
+  reply: I'm sorry about that. Let me get you to someone who can help.
+  latency_ms: 900
+- caller: Yes, do that.
+  reply: Connecting you now.
+  latency_ms: 900
+  tool_calls:
+  - tool: transfer_to_human
+    status: success
+    result:
+      connected: true
+      reason: human_request
+expected_tools:
+- transfer_to_human
+expected_outcome: transferred
+expected_escalation:
+  occurred: true
+  reason: human_request
+forbidden_claims:
+- calm down
+- that's not our fault
+safety_critical: true

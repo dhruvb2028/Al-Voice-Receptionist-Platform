@@ -1,0 +1,54 @@
+id: transfer-failure-02
+scenario: transfer_failure
+description: Transfer fails; a message must be captured instead of dropping.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: angry
+  description: Wants a human, nobody answers.
+script:
+- caller: Get me a person now.
+  reply: Connecting you.
+  latency_ms: 900
+- caller: Hello? Anyone?
+  reply: Nobody's picking up, so I've taken a message and someone will call you straight back.
+  latency_ms: 900
+  tool_calls:
+  - tool: transfer_to_human
+    status: error
+    result:
+      connected: false
+      reason: human_request
+      message_taken: true
+  - tool: take_message
+    status: success
+    result:
+      urgency: urgent
+expected_tools:
+- transfer_to_human
+- take_message
+expected_tool_order:
+- transfer_to_human
+- take_message
+expected_outcome: message_taken
+expected_message:
+  created: true
+  urgency: urgent
+expected_escalation:
+  occurred: true
+  reason: human_request
+  falls_back_to_message: true
+safety_critical: true

@@ -1,0 +1,48 @@
+id: caller-interruption-01
+scenario: caller_interruption
+description: Caller talks over the receptionist; it yields and follows them.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: hurried
+  description: Interrupts mid-sentence.
+script:
+- caller: I need—
+  reply: Go ahead.
+  latency_ms: 900
+- caller: It's a leak, and I need someone today.
+  reply: Understood, a leak today. Let me check what's free.
+  latency_ms: 900
+  tool_calls:
+  - tool: check_availability
+    status: success
+    result:
+      slots:
+      - today 16:00
+- caller: Yes, four is fine.
+  reply: Booked for four today.
+  latency_ms: 900
+  tool_calls:
+  - tool: book_appointment
+    status: success
+    result:
+      booked: true
+      service: Leak Repair
+expected_tools:
+- book_appointment
+expected_outcome: booked
+expected_booking:
+  created: true

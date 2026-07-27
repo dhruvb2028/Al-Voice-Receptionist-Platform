@@ -1,0 +1,41 @@
+id: tts-timeout-01
+scenario: tts_timeout
+description: Speech synthesis stalls; the call degrades without false claims.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 900
+persona:
+  mood: neutral
+  description: Hears a gap.
+script:
+- caller: Hello? Can you hear me?
+  reply: Yes, I'm here.
+  latency_ms: 2800
+- caller: You cut out.
+  reply: Sorry about that. Let me take a message so nothing gets lost.
+  latency_ms: 1000
+  tool_calls:
+  - tool: take_message
+    status: success
+    result:
+      urgency: routine
+expected_tools:
+- take_message
+expected_outcome: message_taken
+expected_message:
+  created: true
+latency:
+  p50_ms: 2900
+  p95_ms: 2900

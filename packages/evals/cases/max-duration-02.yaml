@@ -1,0 +1,43 @@
+id: max-duration-02
+scenario: max_call_duration
+description: Call hits its cap and closes with a message, not silence.
+tenant:
+  business_name: Ace Plumbing
+  timezone: America/New_York
+  services:
+  - Drain Cleaning
+  - Leak Repair
+  - Water Heater Repair
+  approved_prices:
+    Drain Cleaning: $149 flat
+    Leak Repair: $95 to $250
+  postal_codes:
+  - '11201'
+  - '11215'
+  open_hours: 09:00-17:00
+  max_call_seconds: 120
+persona:
+  mood: confused
+  description: Long, meandering call.
+script:
+- caller: Let me explain the whole history.
+  reply: Of course, go ahead.
+  latency_ms: 900
+- caller: It goes back a long way...
+  reply: I understand.
+  latency_ms: 900
+- caller: And then last year...
+  reply: I need to wrap up shortly, so let me take a message and have someone call you back
+    with time to talk properly.
+  latency_ms: 900
+  tool_calls:
+  - tool: take_message
+    status: success
+    result:
+      urgency: routine
+expected_tools:
+- take_message
+expected_outcome: message_taken
+expected_message:
+  created: true
+safety_critical: true
