@@ -409,3 +409,29 @@ export interface SystemHealth {
   tenant_failures: TenantFailure[];
   database_latency_ms: number;
 }
+
+// --- Onboarding (mirror api/services/onboarding.py) -------------------------
+
+export interface OnboardingStep {
+  key: string;
+  title: string;
+  description: string;
+  status: "complete" | "blocked" | "pending";
+  attested: boolean;
+  waivable: boolean;
+  detail: string;
+  attested_by: string | null;
+  attested_at: string | null;
+  waived: boolean;
+  waiver_reason: string | null;
+}
+
+export interface OnboardingState {
+  tenant_id: string;
+  tenant_name: string;
+  tenant_status: string;
+  steps: OnboardingStep[];
+  readiness: ActivationReadiness;
+  completed_steps: number;
+  total_steps: number;
+}

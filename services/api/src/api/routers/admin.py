@@ -14,7 +14,7 @@ from ai_database.repositories import AdminContext, AdminRepository
 from ai_providers.auth import AuthenticationProvider, ClerkAuthProvider, NullAuthProvider
 from ai_shared.errors import NotFoundError, ValidationFailedError
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth.dependencies import require_platform_admin
@@ -36,6 +36,16 @@ from api.services.metrics import (
     TenantOverview,
     platform_overview,
     tenant_overview,
+)
+from api.services.onboarding import (
+    OnboardingReport,
+    OnboardingState,
+    activation_report,
+    handover_checklist,
+    onboarding_state,
+    record_step,
+    test_call_report,
+    waive_step,
 )
 from api.settings import get_settings
 
@@ -244,3 +254,87 @@ async def admin_read_call(
     if detail is None:
         raise NotFoundError("Call not found.")
     return detail
+
+
+# --- Onboarding workflow -----------------------------------------------------
+
+
+class RecordStepRequest(BaseModel):
+    passed: bool = True
+    note: str | None = Field(default=None, max_length=500)
+
+
+class WaiveStepRequest(BaseModel):
+    reason: str = Field(min_length=10, max_length=500)
+
+
+@router.get("/tenants/{tenant_id}/onboarding")
+async def read_onboarding(
+    tenant_id: uuid.UUID,
+    repo: Annotated[AdminRepository, Depends(_repo)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> OnboardingState:
+    """Every onboarding step with its live status and blockers."""
+    if await repo.get_tenant(tenant_id) is None:
+        raise NotFoundError("Tenant not found.")
+    return await onboarding_state(session, tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/onboarding/{step_key}/record")
+async def record_onboarding_step(
+    tenant_id: uuid.UUID,
+    step_key: str,
+    request: RecordStepRequest,
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> OnboardingState:
+    """Attest that a human-judgement step passed. Audited."""
+    return await record_step(
+        session,
+        tenant_id=tenant_id,
+        step_key=step_key,
+        passed=request.passed,
+        actor_external_user_id=context.actor_external_user_id,
+        actor_role="platform_admin",
+        note=request.note,
+    )
+
+
+@router.post("/tenants/{tenant_id}/onboarding/{step_key}/waive")
+async def waive_onboarding_step(
+    tenant_id: uuid.UUID,
+    step_key: str,
+    request: WaiveStepRequest,
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> OnboardingState:
+    """Skip a waivable step, recording who decided and why."""
+    return await waive_step(
+        session,
+        tenant_id=tenant_id,
+        step_key=step_key,
+        reason=request.reason,
+        actor_external_user_id=context.actor_external_user_id,
+        actor_role="platform_admin",
+    )
+
+
+@router.get("/tenants/{tenant_id}/onboarding/reports/{report}")
+async def read_onboarding_report(
+    tenant_id: uuid.UUID,
+    report: str,
+    repo: Annotated[AdminRepository, Depends(_repo)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> OnboardingReport:
+    """Handover checklist, test-call report, or activation report."""
+    if await repo.get_tenant(tenant_id) is None:
+        raise NotFoundError("Tenant not found.")
+    builders = {
+        "handover": handover_checklist,
+        "test-calls": test_call_report,
+        "activation": activation_report,
+    }
+    builder = builders.get(report)
+    if builder is None:
+        raise NotFoundError("Unknown report.")
+    return await builder(session, tenant_id)
