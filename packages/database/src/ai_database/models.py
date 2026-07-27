@@ -106,6 +106,8 @@ class Tenant(TimestampMixin, Base):
     plan_label: Mapped[str | None] = mapped_column(String(80))
     external_auth_org_id: Mapped[str | None] = mapped_column(String(120), unique=True)
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    country: Mapped[str] = mapped_column(String(2), nullable=False, default="US")
+    expected_monthly_calls: Mapped[int | None] = mapped_column(Integer)
     # Soft archive: churned tenants keep history until contractual purge.
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -151,6 +153,11 @@ class TenantConfig(TimestampMixin, Base):
     # Structured escalation rules (triggers, windows, targets) evolve
     # faster than the schema; validated by Pydantic before write.
     escalation_policy: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    business_phone: Mapped[str | None] = mapped_column(String(20))
+    # Activation checklist flags set by admin workflows (browser/phone
+    # test results, waivers, escalation verification). Flexible by
+    # design: checks evolve without schema churn.
+    activation_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     configuration_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     approved_by: Mapped[str | None] = mapped_column(String(120))

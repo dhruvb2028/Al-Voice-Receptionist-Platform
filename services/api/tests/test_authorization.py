@@ -117,9 +117,13 @@ async def test_admin_can_list_tenants(
     client: httpx.AsyncClient, mint_token: Callable[..., str], seeded_tenants: dict[str, Any]
 ) -> None:
     token = mint_token(sub="admin_user", platform_role="platform_admin")
-    response = await client.get("/admin/tenants", headers=_auth(token))
+    response = await client.get(
+        "/admin/tenants",
+        params={"search": seeded_tenants["suffix"]},
+        headers=_auth(token),
+    )
     assert response.status_code == 200
-    slugs = {t["slug"] for t in response.json()}
+    slugs = {t["slug"] for t in response.json()["items"]}
     assert f"auth-a-{seeded_tenants['suffix']}" in slugs
     assert f"auth-b-{seeded_tenants['suffix']}" in slugs
 

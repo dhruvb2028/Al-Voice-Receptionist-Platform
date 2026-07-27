@@ -9,14 +9,26 @@ tenants explicitly by ID — the only place that is permitted.
 import uuid
 from typing import Annotated
 
+from ai_database.enums import TenantStatus
 from ai_database.repositories import AdminContext, AdminRepository
-from ai_shared.errors import NotFoundError
-from fastapi import APIRouter, Depends
+from ai_providers.auth import AuthenticationProvider, ClerkAuthProvider, NullAuthProvider
+from ai_shared.errors import NotFoundError, ValidationFailedError
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth.dependencies import require_platform_admin
 from api.db import get_session
+from api.schemas.admin_tenants import (
+    ActivationReadiness,
+    LifecycleActionRequest,
+    LifecycleActionResponse,
+    TenantCreatedResponse,
+    TenantCreateRequest,
+    TenantListResponse,
+)
+from api.services import tenant_admin
+from api.settings import get_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -27,6 +39,10 @@ class AdminTenantView(BaseModel):
     slug: str
     status: str
     vertical: str
+    timezone: str
+    country: str
+    expected_monthly_calls: int | None
+    external_auth_org_id: str | None
 
 
 def _repo(
@@ -36,17 +52,46 @@ def _repo(
     return AdminRepository(session, context)
 
 
+def get_auth_provider() -> AuthenticationProvider:
+    settings = get_settings()
+    if settings.clerk_secret_key:
+        return ClerkAuthProvider(secret_key=settings.clerk_secret_key)
+    return NullAuthProvider()
+
+
 @router.get("/tenants")
 async def list_tenants(
-    repo: Annotated[AdminRepository, Depends(_repo)],
-) -> list[AdminTenantView]:
-    tenants = await repo.list_tenants()
-    return [
-        AdminTenantView(
-            id=t.id, name=t.name, slug=t.slug, status=t.status.value, vertical=t.vertical
-        )
-        for t in tenants
-    ]
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    search: Annotated[str | None, Query(max_length=80)] = None,
+    status: Annotated[TenantStatus | None, Query()] = None,
+    sort: Annotated[str, Query(pattern="^(name|status|created)$")] = "name",
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> TenantListResponse:
+    items, total = await tenant_admin.list_tenants_with_stats(
+        session, search=search, status=status, sort=sort, page=page, page_size=page_size
+    )
+    return TenantListResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/tenants", status_code=201)
+async def create_tenant(
+    request: TenantCreateRequest,
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    auth_provider: Annotated[AuthenticationProvider, Depends(get_auth_provider)],
+) -> TenantCreatedResponse:
+    tenant, owner_invited = await tenant_admin.create_tenant(
+        session, request=request, context=context, auth_provider=auth_provider
+    )
+    return TenantCreatedResponse(
+        id=tenant.id,
+        slug=tenant.slug,
+        status=tenant.status.value,
+        external_auth_org_id=tenant.external_auth_org_id,
+        owner_invited=owner_invited,
+    )
 
 
 @router.get("/tenants/{tenant_id}")
@@ -63,4 +108,64 @@ async def read_tenant(
         slug=tenant.slug,
         status=tenant.status.value,
         vertical=tenant.vertical,
+        timezone=tenant.timezone,
+        country=tenant.country,
+        expected_monthly_calls=tenant.expected_monthly_calls,
+        external_auth_org_id=tenant.external_auth_org_id,
     )
+
+
+@router.get("/tenants/{tenant_id}/activation-readiness")
+async def read_activation_readiness(
+    tenant_id: uuid.UUID,
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ActivationReadiness:
+    return await tenant_admin.activation_readiness(session, tenant_id=tenant_id)
+
+
+def _require_confirmation(request: LifecycleActionRequest) -> None:
+    if not request.confirm:
+        raise ValidationFailedError("This action requires explicit confirmation.")
+
+
+@router.post("/tenants/{tenant_id}/activate")
+async def activate_tenant(
+    tenant_id: uuid.UUID,
+    request: LifecycleActionRequest,
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> LifecycleActionResponse:
+    _require_confirmation(request)
+    tenant = await tenant_admin.transition_tenant(
+        session, tenant_id=tenant_id, target=TenantStatus.ACTIVE, context=context
+    )
+    return LifecycleActionResponse(id=tenant.id, status=tenant.status.value)
+
+
+@router.post("/tenants/{tenant_id}/pause")
+async def pause_tenant(
+    tenant_id: uuid.UUID,
+    request: LifecycleActionRequest,
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> LifecycleActionResponse:
+    _require_confirmation(request)
+    tenant = await tenant_admin.transition_tenant(
+        session, tenant_id=tenant_id, target=TenantStatus.PAUSED, context=context
+    )
+    return LifecycleActionResponse(id=tenant.id, status=tenant.status.value)
+
+
+@router.post("/tenants/{tenant_id}/begin-testing")
+async def begin_testing(
+    tenant_id: uuid.UUID,
+    request: LifecycleActionRequest,
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> LifecycleActionResponse:
+    _require_confirmation(request)
+    tenant = await tenant_admin.transition_tenant(
+        session, tenant_id=tenant_id, target=TenantStatus.TESTING, context=context
+    )
+    return LifecycleActionResponse(id=tenant.id, status=tenant.status.value)

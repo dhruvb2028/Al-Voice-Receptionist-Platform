@@ -8,6 +8,8 @@ dependencies = [
     "pydantic-settings>=2.6",
     "fastapi>=0.115",
     "cryptography>=44.0",
+    # IANA timezone database: required on Windows and slim containers.
+    "tzdata>=2024.2",
 ]
 
 [build-system]
