@@ -486,6 +486,12 @@ class Message(Base):
         _enum(DeliveryStatus, "delivery_status"), nullable=False, default=DeliveryStatus.PENDING
     )
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: set when the business marks the message handled
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Internal client note — dashboard-only by construction: the
+    # conversation engine's persistence layer never selects this column,
+    # so it can never be read aloud by the receptionist.
+    internal_note_encrypted: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now, server_default=sa_text("now()")
     )

@@ -271,3 +271,46 @@ export interface RecordingUrlResponse {
   url: string;
   expires_seconds: number;
 }
+
+// --- Bookings & messages (mirror api/services/client_records.py) ------------
+
+export interface BookingListItem {
+  id: string;
+  customer_name: string | null;
+  phone_last_four: string | null;
+  service: string | null;
+  scheduled_at: string;
+  timezone: string;
+  address: string | null;
+  calendar_status: string;
+  status: string;
+  call_id: string | null;
+  created_at: string;
+}
+
+export interface BookingListPage {
+  items: BookingListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface MessageListItem {
+  id: string;
+  customer_name: string | null;
+  phone_last_four: string | null;
+  body: string | null;
+  urgency: string;
+  created_at: string;
+  call_id: string | null;
+  delivery_status: string;
+  reviewed_at: string | null;
+  internal_note: string | null;
+}
+
+export interface MessageListPage {
+  items: MessageListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}

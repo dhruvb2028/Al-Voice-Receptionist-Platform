@@ -10,12 +10,13 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from ai_database.enums import CallOutcome, Urgency
+from ai_database.enums import BookingStatus, CallOutcome, Urgency
 from ai_database.models import Tenant
+from ai_shared.crypto import AesGcmEncryptionService, EncryptionService
 from ai_shared.errors import NotFoundError, ValidationFailedError
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +31,22 @@ from api.services.calls import (
     export_calls_csv,
     list_calls,
 )
+from api.services.client_records import (
+    BookingListFilters,
+    BookingListPage,
+    MessageListFilters,
+    MessageListItem,
+    MessageListPage,
+    cancel_booking,
+    export_bookings_csv,
+    export_messages_csv,
+    list_bookings,
+    list_messages,
+    message_item,
+    set_message_note,
+    set_message_reviewed,
+)
+from api.settings import get_settings
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
 
@@ -249,3 +266,199 @@ async def read_usage(
     # Owner-only surface; real aggregation arrives with the usage milestone.
     assert principal.tenant_id is not None
     return UsageView(tenant_id=principal.tenant_id, note="usage reporting arrives later")
+
+
+# --- Bookings and messages ---------------------------------------------------
+
+
+def _optional_crypto() -> EncryptionService | None:
+    """None when encryption keys are unconfigured (local dev) — encrypted
+    fields then render as unavailable rather than erroring."""
+    settings = get_settings()
+    if not settings.data_encryption_key or not settings.lookup_hash_key:
+        return None
+    return AesGcmEncryptionService(
+        data_key_b64=settings.data_encryption_key,
+        hash_key_b64=settings.lookup_hash_key,
+    )
+
+
+def booking_filters(
+    search: str | None = None,
+    status: BookingStatus | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    sort: str = Query(default="-scheduled_at", pattern="^-?scheduled_at$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> BookingListFilters:
+    return BookingListFilters(
+        search=search,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/bookings")
+async def read_bookings(
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    filters: Annotated[BookingListFilters, Depends(booking_filters)],
+) -> BookingListPage:
+    """Bookings with search, status and date filters, and pagination."""
+    assert principal.tenant_id is not None
+    return await list_bookings(session, principal.tenant_id, filters, _optional_crypto())
+
+
+@router.get("/bookings/export")
+async def export_bookings(
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    filters: Annotated[BookingListFilters, Depends(booking_filters)],
+) -> PlainTextResponse:
+    """CSV export of the filtered bookings."""
+    assert principal.tenant_id is not None
+    body = await export_bookings_csv(session, principal.tenant_id, filters, _optional_crypto())
+    return PlainTextResponse(
+        body,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="bookings.csv"'},
+    )
+
+
+class CancelBookingRequest(BaseModel):
+    confirm: bool = False
+
+
+class BookingActionResponse(BaseModel):
+    id: uuid.UUID
+    status: str
+    reconciliation_status: str
+
+
+@router.post("/bookings/{booking_id}/cancel")
+async def request_booking_cancellation(
+    booking_id: uuid.UUID,
+    request: CancelBookingRequest,
+    principal: Annotated[Principal, Depends(require_client_owner)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> BookingActionResponse:
+    """Owner-only cancellation with explicit confirmation. Audited, and
+    never a hard delete — calendar cleanup goes through reconciliation."""
+    if not request.confirm:
+        raise ValidationFailedError("Cancellation requires explicit confirmation.")
+    assert principal.tenant_id is not None
+    booking = await cancel_booking(
+        session,
+        tenant_id=principal.tenant_id,
+        booking_id=booking_id,
+        actor_external_user_id=principal.external_user_id,
+        actor_role=principal.role.value,
+    )
+    if booking is None:
+        raise NotFoundError("Not found.")
+    return BookingActionResponse(
+        id=booking.id,
+        status=booking.status.value,
+        reconciliation_status=booking.reconciliation_status.value,
+    )
+
+
+def message_filters(
+    search: str | None = None,
+    urgency: Urgency | None = None,
+    reviewed: str | None = Query(default=None, pattern="^(yes|no)$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> MessageListFilters:
+    return MessageListFilters(
+        search=search, urgency=urgency, reviewed=reviewed, page=page, page_size=page_size
+    )
+
+
+@router.get("/messages")
+async def read_messages(
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    filters: Annotated[MessageListFilters, Depends(message_filters)],
+) -> MessageListPage:
+    """Messages with urgency and reviewed filters, and pagination."""
+    assert principal.tenant_id is not None
+    return await list_messages(session, principal.tenant_id, filters, _optional_crypto())
+
+
+@router.get("/messages/export")
+async def export_messages(
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    filters: Annotated[MessageListFilters, Depends(message_filters)],
+) -> PlainTextResponse:
+    """CSV export of the filtered messages."""
+    assert principal.tenant_id is not None
+    body = await export_messages_csv(session, principal.tenant_id, filters, _optional_crypto())
+    return PlainTextResponse(
+        body,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="messages.csv"'},
+    )
+
+
+class ReviewMessageRequest(BaseModel):
+    reviewed: bool
+
+
+@router.post("/messages/{message_id}/review")
+async def review_message(
+    message_id: uuid.UUID,
+    request: ReviewMessageRequest,
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> MessageListItem:
+    """Mark a message reviewed (or not); audited."""
+    assert principal.tenant_id is not None
+    message = await set_message_reviewed(
+        session,
+        tenant_id=principal.tenant_id,
+        message_id=message_id,
+        reviewed=request.reviewed,
+        actor_external_user_id=principal.external_user_id,
+        actor_role=principal.role.value,
+    )
+    if message is None:
+        raise NotFoundError("Not found.")
+    return message_item(message, _optional_crypto())
+
+
+class MessageNoteRequest(BaseModel):
+    note: str = Field(max_length=2000)
+
+
+@router.put("/messages/{message_id}/note")
+async def update_message_note(
+    message_id: uuid.UUID,
+    request: MessageNoteRequest,
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> MessageListItem:
+    """Set or clear the internal note. Stored encrypted, dashboard-only —
+    the receptionist can never read it aloud."""
+    assert principal.tenant_id is not None
+    crypto = _optional_crypto()
+    if crypto is None:
+        raise ValidationFailedError("Encryption keys are not configured.")
+    message = await set_message_note(
+        session,
+        tenant_id=principal.tenant_id,
+        message_id=message_id,
+        note=request.note.strip(),
+        crypto=crypto,
+        actor_external_user_id=principal.external_user_id,
+        actor_role=principal.role.value,
+    )
+    if message is None:
+        raise NotFoundError("Not found.")
+    return message_item(message, crypto)

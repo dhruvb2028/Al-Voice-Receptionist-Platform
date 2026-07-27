@@ -1,13 +1,10 @@
-/**
- * CSV export proxy: the token stays server-side and the browser never
- * talks to the API directly.
- */
+/** CSV export proxy — see the calls export route for the pattern. */
 import { NextRequest, NextResponse } from "next/server";
 import { proxyCsvExport } from "@/lib/csv-export";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   return proxyCsvExport(request, {
-    apiPath: "/tenant/calls/export",
-    filename: "calls.csv",
+    apiPath: "/tenant/bookings/export",
+    filename: "bookings.csv",
   });
 }
