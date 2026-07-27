@@ -50,3 +50,10 @@ migrate: ## Apply database migrations (needs DATABASE_DIRECT_URL)
 
 migration: ## Autogenerate a migration: make migration m="add calls table"
 	uv run alembic revision --autogenerate -m "$(m)"
+
+seed: ## Seed the demo plumbing tenant (needs DATABASE_DIRECT_URL)
+	uv run python -m ai_database.seed
+
+test-db: ## Start the local test database container
+	docker run -d --name receptionist-test-pg -e POSTGRES_PASSWORD=test \
+		-e POSTGRES_DB=receptionist_test -p 55432:5432 postgres:16-alpine
