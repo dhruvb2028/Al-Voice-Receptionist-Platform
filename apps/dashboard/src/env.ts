@@ -19,7 +19,12 @@ const clientSchema = z.object({
 });
 
 function validate<T extends z.ZodTypeAny>(schema: T, values: Record<string, string | undefined>): z.infer<T> {
-  const parsed = schema.safeParse(values);
+  // Treat empty strings as unset so defaults apply (docker build args and
+  // CI can pass "" without bypassing validation defaults).
+  const cleaned = Object.fromEntries(
+    Object.entries(values).filter(([, v]) => v !== undefined && v !== ""),
+  );
+  const parsed = schema.safeParse(cleaned);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((issue) => `  ${issue.path.join(".")}: ${issue.message}`)
