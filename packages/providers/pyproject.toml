@@ -7,6 +7,7 @@ dependencies = [
     "httpx>=0.28",
     "tenacity>=9.0",
     "pydantic>=2.9",
+    "websockets>=13.1",
 ]
 
 [build-system]
