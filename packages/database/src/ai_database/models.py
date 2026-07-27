@@ -42,6 +42,7 @@ from ai_database.enums import (
     CalendarConnectionStatus,
     CallDirection,
     CallOutcome,
+    ConfigVersionState,
     DeliveryStatus,
     EscalationReason,
     EscalationStatus,
@@ -154,6 +155,11 @@ class TenantConfig(TimestampMixin, Base):
     # faster than the schema; validated by Pydantic before write.
     escalation_policy: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     business_phone: Mapped[str | None] = mapped_column(String(20))
+    address: Mapped[str | None] = mapped_column(Text)
+    website: Mapped[str | None] = mapped_column(String(200))
+    after_hours_greeting: Mapped[str | None] = mapped_column(Text)
+    speaking_style: Mapped[str | None] = mapped_column(String(80))
+    filler_phrases: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     # Activation checklist flags set by admin workflows (browser/phone
     # test results, waivers, escalation verification). Flexible by
     # design: checks evolve without schema churn.
@@ -630,4 +636,50 @@ class ProviderEvent(Base):
     __table_args__ = (
         UniqueConstraint("provider", "external_event_id", name="uq_provider_event"),
         Index("ix_provider_events_status", "status"),
+    )
+
+
+class ConfigVersion(TimestampMixin, Base):
+    """Versioned configuration snapshots driving the approval workflow.
+
+    Exactly one open (draft/pending_review) and at most one active row
+    per tenant, enforced by partial unique indexes. The active row's
+    payload is what approval applied onto the live config tables — the
+    voice path reads those tables, never a draft.
+    """
+
+    __tablename__ = "config_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[ConfigVersionState] = mapped_column(
+        _enum(ConfigVersionState, "config_version_state"),
+        nullable=False,
+        default=ConfigVersionState.DRAFT,
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[str | None] = mapped_column(String(120))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "version", name="uq_config_version_tenant_version"),
+        Index(
+            "uq_config_versions_one_open",
+            "tenant_id",
+            unique=True,
+            postgresql_where=sa_text("state IN ('draft', 'pending_review')"),
+        ),
+        Index(
+            "uq_config_versions_one_active",
+            "tenant_id",
+            unique=True,
+            postgresql_where=sa_text("state = 'active'"),
+        ),
+        Index("ix_config_versions_tenant_id", "tenant_id"),
     )

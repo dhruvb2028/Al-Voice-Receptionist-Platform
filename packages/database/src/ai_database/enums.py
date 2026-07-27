@@ -146,3 +146,11 @@ class ProviderEventStatus(StrEnum):
     PROCESSED = "processed"
     FAILED = "failed"
     IGNORED = "ignored"
+
+
+class ConfigVersionState(StrEnum):
+    DRAFT = "draft"
+    PENDING_REVIEW = "pending_review"
+    ACTIVE = "active"
+    SUPERSEDED = "superseded"
+    REJECTED = "rejected"
