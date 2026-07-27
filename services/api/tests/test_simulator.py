@@ -103,7 +103,7 @@ async def test_full_session_flow_persists_turns(
     assert turn.status_code == 200, turn.text
     trace = turn.json()
     assert trace["reply_text"]
-    assert trace["phase_after"] == "discovery"
+    assert trace["phase_after"] == "intent_discovery"
     assert trace["total_ms"] is not None
 
     ended = await client.post(

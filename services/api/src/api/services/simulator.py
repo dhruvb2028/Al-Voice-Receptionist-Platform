@@ -289,8 +289,8 @@ async def process_turn(
                 "I'm sorry, we've reached the maximum call time. I'll make sure "
                 "the team gets your details and calls you back."
             ),
-            phase_before=engine.phase,
-            phase_after=engine.phase,
+            phase_before=engine.state,
+            phase_after=engine.state,
             collected=engine.collected,
             outcome="message_taken",
             total_ms=0,

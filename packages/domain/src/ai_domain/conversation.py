@@ -1,19 +1,15 @@
-"""Conversation engine (first cut).
+"""Conversation engine.
 
 The engine is transport-agnostic: the browser simulator drives it with
 text, the voice service will drive it with transcribed speech. It owns
-conversation state, tool dispatch, and the per-turn trace; the LLM is an
-injected provider and can never answer business questions except
-through tool results.
-
-The deterministic state machine milestone extends this module — the
-public surface (``ConversationEngine.process_turn`` → ``TurnTrace``) is
-stable for both callers.
+tool dispatch and the per-turn trace; call state is governed by the
+deterministic state machine (``ai_domain.state_machine``) — the LLM can
+suggest but never decide state, and can never answer business questions
+except through tool results.
 """
 
 import time
 from collections.abc import Awaitable, Callable
-from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -22,20 +18,15 @@ from ai_providers.llm import ChatMessage, LLMProvider, LLMToolCall, ToolSpec
 from pydantic import BaseModel, Field
 
 from ai_domain.config import ReceptionistConfig
+from ai_domain.state_machine import (
+    CallState,
+    CallStateData,
+    ConversationStateMachine,
+)
 
 logger = structlog.get_logger()
 
 MAX_CONTEXT_TURNS = 12  # bounded context: older turns are summarized away
-
-
-class ConversationPhase(StrEnum):
-    GREETING = "greeting"
-    DISCOVERY = "discovery"
-    SCHEDULING = "scheduling"
-    MESSAGE_TAKING = "message_taking"
-    ESCALATION = "escalation"
-    CLOSING = "closing"
-    ENDED = "ended"
 
 
 class CollectedFields(BaseModel):
@@ -67,8 +58,8 @@ class TurnTrace(BaseModel):
     turn_index: int
     caller_text: str
     reply_text: str
-    phase_before: ConversationPhase
-    phase_after: ConversationPhase
+    phase_before: CallState
+    phase_after: CallState
     collected: CollectedFields
     tools: list[ToolExecutionTrace] = Field(default_factory=list)
     guardrails: list[GuardrailTrace] = Field(default_factory=list)
@@ -271,17 +262,41 @@ class ConversationEngine:
         config: ReceptionistConfig,
         llm: LLMProvider,
         tools: ToolRegistry | None = None,
+        tenant_id: str = "",
+        call_id: str = "",
     ) -> None:
         self.config = config
         self.llm = llm
         self.tools = tools or build_config_tools(config)
-        self.phase = ConversationPhase.GREETING
-        self.collected = CollectedFields()
-        self.failed_intent_count = 0
+        self.machine = ConversationStateMachine(
+            CallStateData(tenant_id=tenant_id, call_id=call_id),
+            max_call_seconds=config.voice.max_call_seconds,
+        )
+        # The greeting always plays at call start.
+        self.machine.transition(CallState.GREETING)
         self.turn_index = 0
         self._history: list[ChatMessage] = [
             ChatMessage(role="system", content=_system_prompt(config))
         ]
+
+    @property
+    def state(self) -> CallState:
+        return self.machine.state
+
+    @property
+    def collected(self) -> CollectedFields:
+        data = self.machine.data
+        return CollectedFields(
+            caller_name=data.caller_name,
+            callback_number=data.callback_number,
+            address=data.address,
+            service=data.service,
+            urgency=data.urgency,
+        )
+
+    @property
+    def failed_intent_count(self) -> int:
+        return self.machine.data.failed_intent_count
 
     def restore_exchange(self, *, role: str, text: str) -> None:
         """Replay one prior message when rebuilding a session from
@@ -291,8 +306,8 @@ class ConversationEngine:
         self._history.append(ChatMessage(role=role, content=text))  # type: ignore[arg-type]
         if role == "assistant":
             self.turn_index += 1
-        if self.phase is ConversationPhase.GREETING:
-            self.phase = ConversationPhase.DISCOVERY
+        if self.machine.state is CallState.GREETING:
+            self.machine.transition(CallState.INTENT_DISCOVERY)
 
     @property
     def greeting_text(self) -> str:
@@ -349,7 +364,7 @@ class ConversationEngine:
 
     async def process_turn(self, caller_text: str) -> TurnTrace:
         started = time.perf_counter()
-        phase_before = self.phase
+        phase_before = self.machine.state
         self.turn_index += 1
         trace = TurnTrace(
             turn_index=self.turn_index,
@@ -361,39 +376,41 @@ class ConversationEngine:
         )
 
         # Mandatory escalation triggers run BEFORE the LLM — they cannot
-        # be talked out of.
+        # be talked out of. The state machine applies them as overrides.
         if self._emergency_detected(caller_text):
-            self.phase = ConversationPhase.ESCALATION
-            trace.guardrails.append(
-                GuardrailTrace(
-                    guardrail_type="emergency",
-                    action="escalated",
-                    detail="emergency keyword detected",
-                )
-            )
-            trace.escalation_reason = "emergency"
-            trace.reply_text = (
-                "That sounds like an emergency — I'm connecting you to someone "
-                "right now. Please stay on the line."
-            )
-            trace.phase_after = self.phase
-            trace.total_ms = int((time.perf_counter() - started) * 1000)
-            return trace
-
+            self.machine.data.emergency_detected = True
         if self._human_requested(caller_text):
-            self.phase = ConversationPhase.ESCALATION
+            self.machine.data.human_requested = True
+        override = self.machine.check_overrides()
+        if override is not None:
+            if self.machine.data.emergency_detected:
+                reason, detail = "emergency", "emergency keyword detected"
+                reply = (
+                    "That sounds like an emergency — I'm connecting you to someone "
+                    "right now. Please stay on the line."
+                )
+            elif self.machine.data.human_requested:
+                reason, detail = "human_request", None
+                reply = "Of course — let me connect you with someone. One moment."
+            else:
+                reason, detail = "max_duration", "maximum call duration reached"
+                reply = (
+                    "I'm sorry, we've reached the maximum call time. I'll make sure "
+                    "the team gets your details and calls you back."
+                )
             trace.guardrails.append(
-                GuardrailTrace(guardrail_type="human_request", action="escalated")
+                GuardrailTrace(guardrail_type=reason, action="escalated", detail=detail)
             )
-            trace.escalation_reason = "human_request"
-            trace.reply_text = "Of course — let me connect you with someone. One moment."
-            trace.phase_after = self.phase
+            trace.escalation_reason = reason
+            trace.reply_text = reply
+            trace.phase_after = self.machine.state
+            trace.failed_intent_count = self.machine.data.failed_intent_count
             trace.total_ms = int((time.perf_counter() - started) * 1000)
             return trace
 
         self._history.append(ChatMessage(role="user", content=caller_text))
-        if self.phase is ConversationPhase.GREETING:
-            self.phase = ConversationPhase.DISCOVERY
+        if self.machine.state is CallState.GREETING:
+            self.machine.transition(CallState.INTENT_DISCOVERY)
 
         llm_started = time.perf_counter()
         try:
@@ -410,9 +427,9 @@ class ConversationEngine:
                     tool_calls.append(delta.tool_call)
             result = await stream.result()
         except ProviderError as exc:
-            # LLM failure → the fallback ladder, never silence.
-            self.failed_intent_count += 1
-            self.phase = ConversationPhase.ESCALATION
+            # LLM failure → the fallback ladder, never silence. Transfer is
+            # an override target, reachable from any active state.
+            self.machine.transition(CallState.TRANSFER_REQUESTED)
             trace.escalation_reason = "system_error"
             trace.guardrails.append(
                 GuardrailTrace(
@@ -422,7 +439,7 @@ class ConversationEngine:
             trace.reply_text = (
                 "I'm having trouble on my end — let me get someone to help you. One moment please."
             )
-            trace.phase_after = self.phase
+            trace.phase_after = self.machine.state
             trace.total_ms = int((time.perf_counter() - started) * 1000)
             return trace
 
@@ -457,19 +474,20 @@ class ConversationEngine:
             reply_text = "".join(reply_parts)
 
         if not reply_text.strip():
-            self.failed_intent_count += 1
             reply_text = (
                 "I'm sorry, I didn't quite get that. Could you tell me a bit more "
                 "about what you need?"
             )
-            if self.failed_intent_count >= self.config.escalation.failed_intent_threshold:
-                self.phase = ConversationPhase.ESCALATION
+            escalated = self.machine.record_intent_failure(
+                threshold=self.config.escalation.failed_intent_threshold
+            )
+            if escalated:
                 trace.escalation_reason = "intent_failure"
                 reply_text = "Let me connect you with someone who can help. One moment."
 
         self._history.append(ChatMessage(role="assistant", content=reply_text))
         trace.reply_text = reply_text
-        trace.phase_after = self.phase
-        trace.failed_intent_count = self.failed_intent_count
+        trace.phase_after = self.machine.state
+        trace.failed_intent_count = self.machine.data.failed_intent_count
         trace.total_ms = int((time.perf_counter() - started) * 1000)
         return trace
