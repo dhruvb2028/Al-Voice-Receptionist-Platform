@@ -1,0 +1,15 @@
+[project]
+name = "ai-domain"
+version = "0.1.0"
+description = "Domain models and business rules shared by api, voice, and worker"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_domain"]

@@ -1,0 +1,17 @@
+[project]
+name = "ai-providers"
+version = "0.1.0"
+description = "Provider interfaces and adapters (telephony, STT, LLM, TTS, calendar, email, storage)"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28",
+    "tenacity>=9.0",
+    "pydantic>=2.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_providers"]

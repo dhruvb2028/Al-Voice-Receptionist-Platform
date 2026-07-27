@@ -1,0 +1,76 @@
+[project]
+name = "ai-receptionist"
+version = "0.1.0"
+description = "Multi-tenant AI voice receptionist platform"
+requires-python = ">=3.12"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["services/*", "packages/*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "mypy>=1.13",
+    "ruff>=0.8",
+    "httpx>=0.28",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["packages", "services"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "ASYNC", # async correctness
+    "S",   # bandit security
+    "C4",  # comprehensions
+    "RET", # return statements
+    "SIM", # simplification
+]
+ignore = [
+    "S101", # assert is fine in tests and invariants
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+mypy_path = [
+    "packages/shared/src",
+    "packages/telemetry/src",
+    "packages/domain/src",
+    "packages/database/src",
+    "packages/providers/src",
+    "services/api/src",
+    "services/voice/src",
+    "services/worker/src",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "packages/shared/tests",
+    "packages/telemetry/tests",
+    "packages/domain/tests",
+    "packages/database/tests",
+    "packages/providers/tests",
+    "services/api/tests",
+    "services/voice/tests",
+    "services/worker/tests",
+]
