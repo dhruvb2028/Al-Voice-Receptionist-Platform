@@ -1,17 +1,19 @@
 """Post-call pipeline tests: extraction, idempotency, malformed output,
 booking authority, notifications, and usage accounting."""
 
+import base64
 import json
 import os
 import socket
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
 from ai_providers.errors import ProviderTimeoutError
 from ai_providers.llm import ChatMessage, LLMStream, MockLLMProvider, MockTurn, ToolSpec
 from ai_providers.messaging import MockEmailProvider
+from ai_shared.crypto import AesGcmEncryptionService
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from worker.post_call import assemble_transcript, process_call
@@ -19,6 +21,11 @@ from worker.post_call import assemble_transcript, process_call
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://postgres:test@localhost:55432/receptionist_test",
+)
+
+CRYPTO = AesGcmEncryptionService(
+    data_key_b64=base64.b64encode(b"P" * 32).decode(),
+    hash_key_b64=base64.b64encode(b"Q" * 32).decode(),
 )
 
 
@@ -91,6 +98,18 @@ async def db(migrated: str) -> AsyncIterator[AsyncSession]:
         await session.close()
         await trans.rollback()
     await engine.dispose()
+
+
+@pytest.fixture
+def email_provider() -> Iterator[MockEmailProvider]:
+    """Notifications now go through the dispatcher, which owns the
+    provider singletons."""
+    from worker import notifications as notify
+
+    provider = MockEmailProvider()
+    notify.set_email_provider(provider)
+    yield provider
+    notify.set_email_provider(None)
 
 
 @pytest.fixture
@@ -262,7 +281,7 @@ async def test_confirmed_booking_is_never_overwritten(
 
 
 async def test_message_notification_sent_and_marked_delivered(
-    db: AsyncSession, call_row: dict[str, Any]
+    db: AsyncSession, call_row: dict[str, Any], email_provider: MockEmailProvider
 ) -> None:
     await db.execute(
         text(
@@ -272,23 +291,23 @@ async def test_message_notification_sent_and_marked_delivered(
         ),
         {"id": uuid.uuid4(), "tid": call_row["tenant_id"], "cid": call_row["call_id"]},
     )
-    email = MockEmailProvider()
     message_extraction = dict(
         EXTRACTION,
         outcome="message_taken",
         booking_status="none",
         message_status="taken",
+        urgency="routine",
+        escalation_status="none",
     )
     await process_call(
         db,
         call_id=call_row["call_id"],
         llm=scripted_llm(message_extraction),
-        email=email,
-        notify_to="owner@example.com",
+        crypto=CRYPTO,
     )
 
-    assert len(email.sent) == 1
-    assert email.sent[0]["template"] == "new_message"
+    assert len(email_provider.sent) == 1
+    assert email_provider.sent[0]["template"] == "new_message"
     delivery = (
         await db.execute(
             text("SELECT delivery_status FROM messages WHERE call_id = :cid"),
@@ -299,32 +318,36 @@ async def test_message_notification_sent_and_marked_delivered(
 
 
 async def test_notification_deduplicated_across_deliveries(
-    db: AsyncSession, call_row: dict[str, Any]
+    db: AsyncSession, call_row: dict[str, Any], email_provider: MockEmailProvider
 ) -> None:
-    email = MockEmailProvider()
-    # The idempotency key this job will use was already consumed by a
-    # prior delivery attempt; the duplicate is swallowed, job completes.
-    await email.send_template(
-        to_email="owner@example.com",
-        template="booking_confirmation",
-        variables={"summary": "s"},
-        idempotency_key=f"postcall:{call_row['call_id']}:booking_confirmation",
+    """A redelivered job must not notify twice: the delivery row's unique
+    idempotency key already records the first send."""
+    llm = scripted_llm()
+    assert (
+        await process_call(db, call_id=call_row["call_id"], llm=llm, crypto=CRYPTO)
+    ).value == "complete"
+
+    # Force the pipeline to run again as if the job were redelivered.
+    await db.execute(
+        text("UPDATE calls SET post_processing_status = 'pending' WHERE id = :cid"),
+        {"cid": call_row["call_id"]},
     )
-    status = await process_call(
-        db,
-        call_id=call_row["call_id"],
-        llm=scripted_llm(),
-        email=email,
-        notify_to="owner@example.com",
-    )
+    status = await process_call(db, call_id=call_row["call_id"], llm=scripted_llm(), crypto=CRYPTO)
     assert status.value == "complete"
-    assert len(email.sent) == 1  # no second send
+    assert len(email_provider.sent) == 1  # no second send
+
+    rows = (
+        await db.execute(
+            text("SELECT count(*) FROM notification_deliveries WHERE call_id = :cid"),
+            {"cid": call_row["call_id"]},
+        )
+    ).scalar_one()
+    assert rows == 1
 
 
-async def test_urgent_message_uses_escalation_template(
-    db: AsyncSession, call_row: dict[str, Any]
+async def test_emergency_uses_escalation_template(
+    db: AsyncSession, call_row: dict[str, Any], email_provider: MockEmailProvider
 ) -> None:
-    email = MockEmailProvider()
     urgent = dict(
         EXTRACTION,
         outcome="message_taken",
@@ -332,14 +355,8 @@ async def test_urgent_message_uses_escalation_template(
         message_status="taken",
         urgency="emergency",
     )
-    await process_call(
-        db,
-        call_id=call_row["call_id"],
-        llm=scripted_llm(urgent),
-        email=email,
-        notify_to="owner@example.com",
-    )
-    assert email.sent[0]["template"] == "urgent_escalation"
+    await process_call(db, call_id=call_row["call_id"], llm=scripted_llm(urgent), crypto=CRYPTO)
+    assert email_provider.sent[0]["template"] == "urgent_escalation"
 
 
 async def test_unknown_call_raises_lookup_error(db: AsyncSession) -> None:

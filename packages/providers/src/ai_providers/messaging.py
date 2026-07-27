@@ -77,8 +77,18 @@ class _TemplateSender:
 
 class MockSMSProvider(_TemplateSender):
     def __init__(self) -> None:
+        # Mirrors ai_domain.notifications.SMS_TEMPLATES: the mock must
+        # reject exactly what production rejects.
         super().__init__(
-            approved_templates={"booking_confirmation", "message_ack", "escalation_alert"}
+            approved_templates={
+                "sms_new_booking",
+                "sms_urgent_message",
+                "sms_emergency",
+                # legacy tool-layer templates
+                "booking_confirmation",
+                "message_ack",
+                "escalation_alert",
+            }
         )
 
     async def send_template(  # type: ignore[override]
@@ -99,11 +109,16 @@ class MockSMSProvider(_TemplateSender):
 
 class MockEmailProvider(_TemplateSender):
     def __init__(self) -> None:
+        # Mirrors ai_domain.notifications.EMAIL_TEMPLATES.
         super().__init__(
             approved_templates={
                 "booking_confirmation",
                 "new_message",
                 "urgent_escalation",
+                "failed_call_alert",
+                "daily_summary",
+                "weekly_report",
+                "calendar_disconnected",
                 "owner_invitation",
             }
         )

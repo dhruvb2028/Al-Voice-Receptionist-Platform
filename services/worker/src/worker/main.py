@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import structlog
+from ai_shared.crypto import AesGcmEncryptionService, EncryptionService
 from ai_shared.errors import NotFoundError, UnauthorizedError, ValidationFailedError
 from ai_shared.fastapi_setup import configure_service_app
 from ai_telemetry import configure_logging
@@ -39,6 +40,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 class JobResult(BaseModel):
     status: str
+
+
+def _optional_crypto() -> EncryptionService | None:
+    """None when keys are unconfigured — notifications are then skipped
+    rather than sent unencrypted or crashing the job."""
+    settings = get_settings()
+    if not settings.data_encryption_key or not settings.lookup_hash_key:
+        return None
+    return AesGcmEncryptionService(
+        data_key_b64=settings.data_encryption_key,
+        hash_key_b64=settings.lookup_hash_key,
+    )
 
 
 async def _verify_delivery(request: Request) -> bytes:
@@ -81,7 +94,6 @@ def create_app() -> FastAPI:
 
         from worker.db import get_session_factory
         from worker.llm import get_llm
-        from worker.notifications import get_email_provider, resolve_notify_address
         from worker.post_call import process_call
 
         body = await _verify_delivery(request)
@@ -96,13 +108,11 @@ def create_app() -> FastAPI:
             raise ValidationFailedError("Worker database is not configured.")
         try:
             async with factory() as session, session.begin():
-                notify_to = await resolve_notify_address(session, call_id=call_id)
                 status = await process_call(
                     session,
                     call_id=call_id,
                     llm=get_llm(),
-                    email=get_email_provider(),
-                    notify_to=notify_to,
+                    crypto=_optional_crypto(),
                 )
         except LookupError as exc:
             raise NotFoundError("Unknown call.") from exc
@@ -121,6 +131,49 @@ def create_app() -> FastAPI:
         async with factory() as session, session.begin():
             deleted = await retention_sweep(session, storage=storage)
         return JobResult(status=f"deleted:{deleted}")
+
+    @app.post("/webhooks/sms-status")
+    async def sms_status_callback(request: Request) -> JobResult:
+        """Twilio delivery callback.
+
+        Signature-verified like every other Twilio webhook; an unknown
+        message id is acknowledged rather than retried forever.
+        """
+        from ai_providers.twilio import TwilioTelephonyProvider
+
+        from worker.db import get_session_factory
+        from worker.notifications import record_delivery_callback
+
+        settings = get_settings()
+        if not (settings.twilio_account_sid and settings.twilio_auth_token):
+            raise UnauthorizedError("SMS callbacks are not configured.")
+
+        form = await request.form()
+        params = {key: str(value) for key, value in form.items()}
+        provider = TwilioTelephonyProvider(
+            account_sid=settings.twilio_account_sid,
+            auth_token=settings.twilio_auth_token,
+        )
+        url = settings.sms_status_callback_url or str(request.url)
+        if not provider.verify_webhook(
+            url=url, params=params, signature=request.headers.get("X-Twilio-Signature", "")
+        ):
+            logger.warning("sms_callback_signature_invalid")
+            raise UnauthorizedError("Invalid webhook signature.")
+
+        message_sid = params.get("MessageSid") or params.get("SmsSid")
+        status = params.get("MessageStatus") or params.get("SmsStatus")
+        if not message_sid or not status:
+            raise ValidationFailedError("Malformed delivery callback.")
+
+        factory = get_session_factory()
+        if factory is None:
+            raise ValidationFailedError("Worker database is not configured.")
+        async with factory() as session, session.begin():
+            delivery = await record_delivery_callback(
+                session, provider_message_id=message_sid, status=status
+            )
+        return JobResult(status=delivery.status.value if delivery else "unknown")
 
     return configure_service_app(app, service_name="worker")
 

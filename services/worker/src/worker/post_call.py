@@ -19,14 +19,17 @@ from ai_database.audit import write_audit
 from ai_database.enums import (
     CallOutcome,
     DeliveryStatus,
+    NotificationStatus,
+    NotificationType,
     ProcessingStatus,
     TranscriptStatus,
     TurnRole,
 )
 from ai_database.models import Booking, Call, Message, Turn, UsageRecord
+from ai_domain.notifications import NotificationPolicyError
 from ai_providers.errors import ProviderError
 from ai_providers.llm import ChatMessage, LLMProvider, LLMUsage
-from ai_providers.messaging import EmailProvider
+from ai_shared.crypto import EncryptionService
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,8 +123,7 @@ async def process_call(
     *,
     call_id: uuid.UUID,
     llm: LLMProvider,
-    email: EmailProvider | None = None,
-    notify_to: str | None = None,
+    crypto: EncryptionService | None = None,
 ) -> ProcessingStatus:
     """Run the full post-call pipeline for one call. Idempotent."""
     call = (await session.execute(select(Call).where(Call.id == call_id))).scalar_one_or_none()
@@ -196,29 +198,12 @@ async def process_call(
 
     call.transcript_status = TranscriptStatus.COMPLETE
 
-    # Notifications (deduplicated by call-scoped idempotency key; a
-    # duplicate delivery finds the key used and the original stands).
-    if email is not None and notify_to:
-        template = None
-        variables: dict[str, str] = {"summary": extraction.summary}
-        if extraction.outcome == "booked":
-            template = "booking_confirmation"
-            variables["time"] = extraction.scheduled_time or "see calendar"
-        elif extraction.message_status == "taken":
-            template = "urgent_escalation" if extraction.urgency == "emergency" else "new_message"
-        if template:
-            try:
-                await email.send_template(
-                    to_email=notify_to,
-                    template=template,
-                    variables=variables,
-                    idempotency_key=f"postcall:{call_id}:{template}",
-                )
-            except ProviderError as exc:
-                if exc.category != "duplicate_send":
-                    logger.warning("post_call_notification_failed", error=exc.category)
-            else:
-                await _mark_messages_delivered(session, call)
+    # Notifications go through the dispatcher, which owns channel
+    # routing, consent, suppression, and duplicate prevention. A failure
+    # to notify never fails the job — the extraction is already durable.
+    notified = await _notify(session, call=call, extraction=extraction, crypto=crypto)
+    if notified:
+        await _mark_messages_delivered(session, call)
 
     # Evaluation metadata rides on the audit trail for the eval harness.
     await write_audit(
@@ -242,6 +227,55 @@ async def process_call(
     await session.flush()
     logger.info("post_call_complete", call_id=str(call_id), outcome=extraction.outcome)
     return ProcessingStatus.COMPLETE
+
+
+def _notification_type(extraction: CallExtraction) -> NotificationType | None:
+    """Which event this call represents, if any is worth notifying about."""
+    if extraction.escalation_status != "none" or extraction.urgency == "emergency":
+        return NotificationType.EMERGENCY_ESCALATION
+    if extraction.booking_status == "confirmed" or extraction.outcome == "booked":
+        return NotificationType.NEW_BOOKING
+    if extraction.message_status == "taken":
+        return NotificationType.URGENT_MESSAGE
+    if extraction.outcome == "failed":
+        return NotificationType.FAILED_CALL
+    return None
+
+
+async def _notify(
+    session: AsyncSession,
+    *,
+    call: Call,
+    extraction: CallExtraction,
+    crypto: EncryptionService | None,
+) -> bool:
+    """Dispatch the post-call notification. True when something was sent."""
+    notification_type = _notification_type(extraction)
+    if notification_type is None or crypto is None:
+        return False
+
+    from worker.notifications import dispatch
+
+    variables = {"summary": extraction.summary}
+    if extraction.scheduled_time:
+        variables["time"] = extraction.scheduled_time
+    try:
+        results = await dispatch(
+            session,
+            tenant_id=call.tenant_id,
+            notification_type=notification_type,
+            variables=variables,
+            crypto=crypto,
+            call_id=call.id,
+        )
+    except NotificationPolicyError as exc:
+        # A policy violation is a bug in the caller, not a provider fault.
+        logger.warning("post_call_notification_blocked", error=str(exc))
+        return False
+    except ProviderError as exc:
+        logger.warning("post_call_notification_failed", error=exc.category)
+        return False
+    return any(r.status is NotificationStatus.SENT for r in results)
 
 
 async def _mark_messages_delivered(session: AsyncSession, call: Call) -> None:

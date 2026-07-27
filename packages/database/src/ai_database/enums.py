@@ -165,3 +165,34 @@ class ConfigVersionState(StrEnum):
 class CallTransport(StrEnum):
     PHONE = "phone"
     BROWSER_TEXT = "browser_text"
+
+
+class NotificationType(StrEnum):
+    NEW_BOOKING = "new_booking"
+    EMERGENCY_ESCALATION = "emergency_escalation"
+    URGENT_MESSAGE = "urgent_message"
+    FAILED_CALL = "failed_call"
+    DAILY_SUMMARY = "daily_summary"
+    WEEKLY_REPORT = "weekly_report"
+    CALENDAR_DISCONNECTED = "calendar_disconnected"
+
+
+class NotificationChannel(StrEnum):
+    EMAIL = "email"
+    SMS = "sms"
+
+
+class NotificationStatus(StrEnum):
+    PENDING = "pending"
+    SENT = "sent"
+    DELIVERED = "delivered"
+    FAILED = "failed"
+    #: recipient opted out, or consent was never granted
+    SUPPRESSED = "suppressed"
+
+
+class ConsentStatus(StrEnum):
+    #: never asked — the safe default in every jurisdiction
+    UNKNOWN = "unknown"
+    GRANTED = "granted"
+    REVOKED = "revoked"

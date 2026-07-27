@@ -12,6 +12,14 @@ class WorkerSettings(BaseServiceSettings):
     qstash_current_signing_key: str | None = None
     qstash_next_signing_key: str | None = None
     resend_api_key: str | None = None
+    resend_from_address: str = "notifications@example.com"
+    #: destination for Twilio SMS delivery callbacks
+    sms_status_callback_url: str | None = None
+    twilio_sms_from_number: str | None = None
+
+    # Field encryption (consent and suppression lookups are keyed hashes)
+    data_encryption_key: str | None = None
+    lookup_hash_key: str | None = None
     #: public base URL QStash delivers to (signature `sub` claim)
     worker_base_url: str | None = None
 

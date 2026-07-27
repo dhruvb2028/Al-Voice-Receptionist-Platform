@@ -44,6 +44,7 @@ from ai_database.enums import (
     CallOutcome,
     CallTransport,
     ConfigVersionState,
+    ConsentStatus,
     DeliveryStatus,
     EscalationReason,
     EscalationStatus,
@@ -51,6 +52,9 @@ from ai_database.enums import (
     GuardrailType,
     MemberRole,
     MemberStatus,
+    NotificationChannel,
+    NotificationStatus,
+    NotificationType,
     ProcessingStatus,
     ProviderEventStatus,
     ReconciliationStatus,
@@ -731,3 +735,140 @@ class SimulatorSession(TimestampMixin, Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_simulator_sessions_tenant_id", "tenant_id"),)
+
+
+class NotificationPreference(TimestampMixin, Base):
+    """Per-tenant, per-event channel routing.
+
+    A missing row means the platform default applies; an explicit row is
+    how a tenant turns a channel off. Channels are configurable per
+    notification type because "text me for emergencies, email me the
+    weekly report" is the common shape.
+    """
+
+    __tablename__ = "notification_preferences"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    notification_type: Mapped[NotificationType] = mapped_column(
+        _enum(NotificationType, "notification_type"), nullable=False
+    )
+    channel: Mapped[NotificationChannel] = mapped_column(
+        _enum(NotificationChannel, "notification_channel"), nullable=False
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: overrides tenant_config.notification_email / escalation_number
+    destination: Mapped[str | None] = mapped_column(String(200))
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "notification_type", "channel", name="uq_notification_pref"),
+        Index("ix_notification_preferences_tenant_id", "tenant_id"),
+    )
+
+
+class NotificationDelivery(Base):
+    """One row per attempted notification.
+
+    ``idempotency_key`` is globally unique, so a retried job can never
+    double-send: the insert conflicts and the original delivery stands.
+    Recipients are stored masked — never a full address or phone number.
+    """
+
+    __tablename__ = "notification_deliveries"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False
+    )
+    call_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("calls.id", ondelete="SET NULL"))
+    notification_type: Mapped[NotificationType] = mapped_column(
+        _enum(NotificationType, "notification_type"), nullable=False
+    )
+    channel: Mapped[NotificationChannel] = mapped_column(
+        _enum(NotificationChannel, "notification_channel"), nullable=False
+    )
+    template: Mapped[str] = mapped_column(String(80), nullable=False)
+    #: masked for logs and dashboards: "d***@example.com" / "···4821"
+    recipient_masked: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[NotificationStatus] = mapped_column(
+        _enum(NotificationStatus, "notification_status"),
+        nullable=False,
+        default=NotificationStatus.PENDING,
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(120))
+    #: safe provider response fields only — never message content
+    provider_response: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failure_category: Mapped[str | None] = mapped_column(String(80))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, server_default=sa_text("now()")
+    )
+
+    __table_args__ = (
+        CheckConstraint("attempts >= 0", name="attempts_non_negative"),
+        Index("ix_notification_deliveries_tenant_created", "tenant_id", "created_at"),
+        Index("ix_notification_deliveries_provider_id", "provider_message_id"),
+    )
+
+
+class SmsConsent(TimestampMixin, Base):
+    """SMS consent per destination number, per tenant.
+
+    Consent is recorded against a keyed hash of the number, never the
+    number itself. ``country`` is stored because SMS rules are not
+    uniform: what counts as valid consent, and whether quiet hours apply,
+    depends on the recipient's jurisdiction.
+    """
+
+    __tablename__ = "sms_consents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    phone_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    phone_last_four: Mapped[str | None] = mapped_column(String(4))
+    #: ISO-3166-1 alpha-2, derived from the number's country code
+    country: Mapped[str] = mapped_column(String(2), nullable=False, default="US")
+    status: Mapped[ConsentStatus] = mapped_column(
+        _enum(ConsentStatus, "consent_status"), nullable=False, default=ConsentStatus.UNKNOWN
+    )
+    #: how consent was captured (e.g. "onboarding_form", "sms_reply_start")
+    source: Mapped[str | None] = mapped_column(String(80))
+    granted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "phone_hash", name="uq_sms_consent_tenant_phone"),
+        Index("ix_sms_consents_tenant_id", "tenant_id"),
+    )
+
+
+class EmailSuppression(Base):
+    """Unsubscribed / bounced email addresses, per tenant.
+
+    Checked before every non-transactional send. Stored as a keyed hash
+    so the suppression list is not itself a mailing list.
+    """
+
+    __tablename__ = "email_suppressions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    email_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason: Mapped[str] = mapped_column(String(40), nullable=False, default="unsubscribed")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, server_default=sa_text("now()")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "email_hash", name="uq_email_suppression"),
+        Index("ix_email_suppressions_tenant_id", "tenant_id"),
+    )
