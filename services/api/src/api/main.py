@@ -8,6 +8,10 @@ from ai_shared.fastapi_setup import configure_service_app
 from ai_telemetry import configure_logging
 from fastapi import FastAPI
 
+from api.db import dispose_engine
+from api.routers.admin import router as admin_router
+from api.routers.me import router as me_router
+from api.routers.tenant import router as tenant_router
 from api.settings import get_settings
 
 logger = structlog.get_logger()
@@ -23,6 +27,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     logger.info("service_starting", environment=settings.environment.value)
     yield
+    await dispose_engine()
     logger.info("service_stopping")
 
 
@@ -35,6 +40,9 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json",
     )
+    app.include_router(me_router)
+    app.include_router(tenant_router)
+    app.include_router(admin_router)
     return configure_service_app(app, service_name="api")
 
 

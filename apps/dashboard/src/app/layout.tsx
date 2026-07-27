@@ -1,3 +1,4 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -27,7 +28,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
+  // Clerk is optional at build time (CI has no keys); when unset, the
+  // app renders without a session provider and middleware passes through.
+  const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+  const body = (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
@@ -37,4 +42,6 @@ export default function RootLayout({
       </body>
     </html>
   );
+
+  return clerkEnabled ? <ClerkProvider>{body}</ClerkProvider> : body;
 }

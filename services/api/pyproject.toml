@@ -15,6 +15,7 @@ dependencies = [
     "httpx>=0.28",
     "structlog>=24.4",
     "tenacity>=9.0",
+    "pyjwt>=2.10",
     "ai-shared",
     "ai-telemetry",
     "ai-domain",
