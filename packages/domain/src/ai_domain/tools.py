@@ -562,8 +562,7 @@ def build_business_tools(toolkit: BusinessToolkit) -> "ToolRegistry":
         ToolSpec(
             name="transfer_to_human",
             description=(
-                "Transfer the caller to a human. Use for emergencies and "
-                "explicit requests."
+                "Transfer the caller to a human. Use for emergencies and explicit requests."
             ),
             parameters={
                 "type": "object",
