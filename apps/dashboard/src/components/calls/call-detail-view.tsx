@@ -60,6 +60,27 @@ export function CallDetailView({
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
+        {call.processing_status === "failed" && (
+          <div
+            role="status"
+            className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            <p className="font-medium">Call analysis didn&apos;t finish</p>
+            <p className="mt-0.5">
+              The summary and outcome for this call may be incomplete. The transcript
+              and any bookings or messages below are unaffected.
+            </p>
+          </div>
+        )}
+        {call.processing_status === "pending" && (
+          <div
+            role="status"
+            className="rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground"
+          >
+            This call is still being processed — the summary and outcome will appear
+            shortly.
+          </div>
+        )}
         <Card>
           <CardHeader className="flex items-center justify-between gap-2">
             <CardTitle>Call overview</CardTitle>
@@ -112,7 +133,8 @@ export function CallDetailView({
                 <audio controls preload="none" src={recordingUrl} className="w-full" />
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  A recording is stored for this call.
+                  The recording is stored but temporarily unavailable. Reload the page
+                  to try again.
                 </p>
               )}
             </CardContent>
