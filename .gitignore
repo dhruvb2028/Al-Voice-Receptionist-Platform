@@ -1,0 +1,42 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Builds
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Local working documents
+*.docx
+*.doc
+
+# Test artifacts
+coverage/
+htmlcov/
+.coverage
+audio-fixtures/
