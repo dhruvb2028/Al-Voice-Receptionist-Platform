@@ -11,6 +11,7 @@ import pytest
 from ai_database.models import Booking, Message
 from ai_database.tool_persistence import SqlBookingPersistence, SqlMessagePersistence
 from ai_shared.crypto import AesGcmEncryptionService
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -210,8 +211,6 @@ async def test_booking_concurrent_same_key_creates_exactly_one_row(
         assert set(returned) == {booking_id}
     finally:
         async with factory() as session, session.begin():
-            await session.execute(
-                Booking.__table__.delete().where(Booking.idempotency_key == key)
-            )
-            await session.execute(Tenant.__table__.delete().where(Tenant.id == tenant_id))
+            await session.execute(sa_delete(Booking).where(Booking.idempotency_key == key))
+            await session.execute(sa_delete(Tenant).where(Tenant.id == tenant_id))
         await engine.dispose()
