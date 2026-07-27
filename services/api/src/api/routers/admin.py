@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth.dependencies import require_platform_admin
 from api.db import get_session
+from api.routers.tenant import call_filters
 from api.schemas.admin_tenants import (
     ActivationReadiness,
     LifecycleActionRequest,
@@ -28,6 +29,7 @@ from api.schemas.admin_tenants import (
     TenantListResponse,
 )
 from api.services import tenant_admin
+from api.services.calls import CallDetail, CallListFilters, CallListPage, call_detail, list_calls
 from api.settings import get_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -169,3 +171,37 @@ async def begin_testing(
         session, tenant_id=tenant_id, target=TenantStatus.TESTING, context=context
     )
     return LifecycleActionResponse(id=tenant.id, status=tenant.status.value)
+
+
+# --- Call inspection (admin-expanded view) -----------------------------------
+
+
+@router.get("/tenants/{tenant_id}/calls")
+async def admin_list_calls(
+    tenant_id: uuid.UUID,
+    repo: Annotated[AdminRepository, Depends(_repo)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    filters: Annotated[CallListFilters, Depends(call_filters)],
+) -> CallListPage:
+    """Call history for one tenant, same filters as the client list."""
+    if await repo.get_tenant(tenant_id) is None:
+        raise NotFoundError("Tenant not found.")
+    return await list_calls(session, tenant_id, filters)
+
+
+@router.get("/tenants/{tenant_id}/calls/{call_id}")
+async def admin_read_call(
+    tenant_id: uuid.UUID,
+    call_id: uuid.UUID,
+    repo: Annotated[AdminRepository, Depends(_repo)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> CallDetail:
+    """Full call detail with the admin expansion: tool executions with
+    redacted payloads, guardrail events, provider IDs, latency stages,
+    failure category, and the raw event timeline."""
+    if await repo.get_tenant(tenant_id) is None:
+        raise NotFoundError("Tenant not found.")
+    detail = await call_detail(session, tenant_id, call_id, admin=True)
+    if detail is None:
+        raise NotFoundError("Call not found.")
+    return detail

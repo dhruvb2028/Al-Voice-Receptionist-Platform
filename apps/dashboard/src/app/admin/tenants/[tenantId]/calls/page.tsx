@@ -4,7 +4,7 @@ import { CallsTable } from "@/components/calls/calls-table";
 import { CallsToolbar } from "@/components/calls/calls-toolbar";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 
-export const metadata = { title: "Calls" };
+export const metadata = { title: "Tenant calls" };
 
 interface CallsSearchParams {
   search?: string;
@@ -17,51 +17,35 @@ interface CallsSearchParams {
   page?: string;
 }
 
-export default async function CallsPage({
+export default async function AdminTenantCallsPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ tenantId: string }>;
   searchParams: Promise<CallsSearchParams>;
 }) {
-  const params = await searchParams;
-  const page = Math.max(1, Number(params.page) || 1);
-  const result = await apiFetch<CallListPage>("/tenant/calls", {
-    searchParams: { ...params, page: String(page) },
+  const { tenantId } = await params;
+  const query = await searchParams;
+  const page = Math.max(1, Number(query.page) || 1);
+  const result = await apiFetch<CallListPage>(`/admin/tenants/${tenantId}/calls`, {
+    searchParams: { ...query, page: String(page) },
   });
-
-  const hasFilters = Boolean(
-    params.search ||
-      params.date_from ||
-      params.date_to ||
-      params.outcome ||
-      params.urgency ||
-      params.booking,
-  );
+  const base = `/admin/tenants/${tenantId}/calls`;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Calls</h1>
-        <p className="text-sm text-muted-foreground">
-          Every call your receptionist answered, with transcript and outcome.
-        </p>
-      </div>
-
-      <CallsToolbar exportHref="/dashboard/calls/export" />
+    <div className="space-y-4">
+      <CallsToolbar />
 
       {!result.ok ? (
-        <ErrorState description={result.message} retryHref="/dashboard/calls" />
+        <ErrorState description={result.message} retryHref={base} />
       ) : result.data.items.length === 0 ? (
         <EmptyState
-          title={hasFilters ? "No calls match the current filters" : "Nothing here yet"}
-          description={
-            hasFilters
-              ? "Try widening the date range or clearing filters."
-              : "Every answered call — with transcript, recording, and outcome — appears here once your receptionist is live."
-          }
+          title="No calls found"
+          description="This tenant has no calls matching the current filters."
         />
       ) : (
         <>
-          <CallsTable items={result.data.items} detailBasePath="/dashboard/calls" />
+          <CallsTable items={result.data.items} detailBasePath={base} />
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>
               {result.data.total} call{result.data.total === 1 ? "" : "s"}
@@ -69,7 +53,7 @@ export default async function CallsPage({
             <div className="flex gap-2">
               {page > 1 && (
                 <Link
-                  href={{ query: { ...params, page: page - 1 } }}
+                  href={{ query: { ...query, page: page - 1 } }}
                   className="rounded-md border border-border bg-card px-3 py-1.5 hover:bg-muted"
                 >
                   Previous
@@ -77,7 +61,7 @@ export default async function CallsPage({
               )}
               {page * result.data.page_size < result.data.total && (
                 <Link
-                  href={{ query: { ...params, page: page + 1 } }}
+                  href={{ query: { ...query, page: page + 1 } }}
                   className="rounded-md border border-border bg-card px-3 py-1.5 hover:bg-muted"
                 >
                   Next

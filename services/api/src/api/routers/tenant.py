@@ -7,23 +7,29 @@ endpoint demonstrates the isolation contract: cross-tenant IDs yield
 """
 
 import uuid
+from datetime import datetime
 from typing import Annotated
 
-from ai_database.models import Call, Tenant
-from ai_database.repositories import TenantScopedRepository
-from ai_shared.errors import NotFoundError
-from fastapi import APIRouter, Depends
+from ai_database.enums import CallOutcome, Urgency
+from ai_database.models import Tenant
+from ai_shared.errors import NotFoundError, ValidationFailedError
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth.dependencies import (
-    get_tenant_repository,
-    require_client,
-    require_client_owner,
-)
+from api.auth.dependencies import require_client, require_client_owner
 from api.auth.models import Principal
 from api.db import get_session
+from api.services.calls import (
+    CallDetail,
+    CallListFilters,
+    CallListPage,
+    call_detail,
+    export_calls_csv,
+    list_calls,
+)
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
 
@@ -35,16 +41,35 @@ class TenantView(BaseModel):
     timezone: str
 
 
-class CallSummary(BaseModel):
-    id: uuid.UUID
-    outcome: str | None
-    from_number_last_four: str | None
-    duration_seconds: int | None
-
-
 class UsageView(BaseModel):
     tenant_id: uuid.UUID
     note: str
+
+
+def call_filters(
+    search: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    outcome: CallOutcome | None = None,
+    urgency: Urgency | None = None,
+    booking: str | None = Query(default=None, pattern="^(confirmed|pending|none)$"),
+    sort: str = Query(default="-started_at", pattern="^-?(started_at|duration)$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> CallListFilters:
+    if date_from and date_to and date_from > date_to:
+        raise ValidationFailedError("date_from must not be after date_to.")
+    return CallListFilters(
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        outcome=outcome,
+        urgency=urgency,
+        booking=booking,
+        sort=sort,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("")
@@ -62,21 +87,49 @@ async def read_own_tenant(
     )
 
 
+@router.get("/calls")
+async def read_calls(
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    filters: Annotated[CallListFilters, Depends(call_filters)],
+) -> CallListPage:
+    """Call history with search, filters, sorting, and pagination."""
+    assert principal.tenant_id is not None
+    return await list_calls(session, principal.tenant_id, filters)
+
+
+@router.get("/calls/export")
+async def export_calls(
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    filters: Annotated[CallListFilters, Depends(call_filters)],
+) -> PlainTextResponse:
+    """CSV export of the filtered call history."""
+    assert principal.tenant_id is not None
+    body = await export_calls_csv(session, principal.tenant_id, filters)
+    return PlainTextResponse(
+        body,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="calls.csv"'},
+    )
+
+
 @router.get("/calls/{call_id}")
 async def read_call(
     call_id: uuid.UUID,
-    repo: Annotated[TenantScopedRepository, Depends(get_tenant_repository)],
-) -> CallSummary:
-    call = await repo.get_owned(Call, call_id)
-    if call is None:
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> CallDetail:
+    """Full call detail: overview, transcript, related records, timeline.
+
+    Client view — internal identifiers and latency stages stay hidden.
+    """
+    assert principal.tenant_id is not None
+    detail = await call_detail(session, principal.tenant_id, call_id)
+    if detail is None:
         # Cross-tenant or nonexistent — the response is identical.
         raise NotFoundError("Not found.")
-    return CallSummary(
-        id=call.id,
-        outcome=call.outcome.value if call.outcome else None,
-        from_number_last_four=call.from_number_last_four,
-        duration_seconds=call.duration_seconds,
-    )
+    return detail
 
 
 class ConfigurationView(BaseModel):
