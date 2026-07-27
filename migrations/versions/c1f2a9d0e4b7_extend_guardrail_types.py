@@ -32,6 +32,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # PostgreSQL cannot remove enum values; additions are permanent.
-    # Rows using the new values would block a manual rebuild anyway.
+    # IRREVERSIBLE: PostgreSQL cannot remove a value from an enum type,
+    # and rows already using the new values would block a manual type
+    # rebuild. Rolling back past this revision means restoring from a
+    # backup rather than downgrading — see docs/rollback.md.
     pass

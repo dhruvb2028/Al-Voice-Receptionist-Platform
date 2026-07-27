@@ -48,6 +48,12 @@ jobs:
       - name: Pytest
         run: uv run pytest -q
 
+      # Offline migration checks: one head, and every migration either
+      # reverses or declares why it cannot. Cheap here, expensive during
+      # a rollback.
+      - name: Migration verify
+        run: bash infra/scripts/migrate.sh verify
+
       # Exit 2 means a safety property regressed; exit 1 is a quality
       # failure. Both fail the build, but the code distinguishes them in
       # the log and lets the report be read before triage.
