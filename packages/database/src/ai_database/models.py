@@ -149,6 +149,8 @@ class TenantConfig(TimestampMixin, Base):
     recording_consent_text: Mapped[str | None] = mapped_column(Text)
     #: days recordings are kept (None -> platform default of 30; max 90)
     recording_retention_days: Mapped[int | None] = mapped_column(Integer)
+    #: where post-call notifications are emailed (None -> none sent)
+    notification_email: Mapped[str | None] = mapped_column(String(200))
     escalation_number: Mapped[str | None] = mapped_column(String(20))
     max_call_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=900)
     timezone: Mapped[str | None] = mapped_column(String(64))

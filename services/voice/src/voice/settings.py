@@ -15,6 +15,11 @@ class VoiceSettings(BaseServiceSettings):
     cartesia_api_key: str | None = None
     call_token_signing_key: str | None = None
 
+    # QStash publishing (post-call job enqueue at call end)
+    qstash_token: str | None = None
+    qstash_url: str = "https://qstash.upstash.io"
+    worker_base_url: str | None = None
+
     # --- Groq LLM (all environment-driven; never hardcoded) ---
     groq_api_key: str | None = None
     #: fast model for live turns

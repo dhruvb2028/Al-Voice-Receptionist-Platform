@@ -12,6 +12,14 @@ class WorkerSettings(BaseServiceSettings):
     qstash_current_signing_key: str | None = None
     qstash_next_signing_key: str | None = None
     resend_api_key: str | None = None
+    #: public base URL QStash delivers to (signature `sub` claim)
+    worker_base_url: str | None = None
+
+    # Groq (post-call extraction; latency-insensitive, cheap model)
+    groq_api_key: str | None = None
+    groq_post_call_model: str = "llama-3.1-8b-instant"
+    groq_timeout_seconds: float = 30.0
+    groq_max_retries: int = 2
 
     # Twilio (recording fetch + provider-copy deletion)
     twilio_account_sid: str | None = None
