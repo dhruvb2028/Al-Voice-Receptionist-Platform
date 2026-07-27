@@ -8,6 +8,7 @@ ai_database.metadata.
 import asyncio
 import os
 
+import ai_database.models  # noqa: F401  — registers all tables on the metadata
 from ai_database.metadata import Base
 from alembic import context
 from sqlalchemy import pool
