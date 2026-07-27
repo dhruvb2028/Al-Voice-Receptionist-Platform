@@ -20,12 +20,40 @@ from ai_shared.request_id import (
     sanitize_incoming_request_id,
     set_request_id,
 )
+from ai_shared.security import (
+    DEFAULT_MAX_BODY_BYTES,
+    RateLimiter,
+    build_security_middleware,
+)
 
 logger = structlog.get_logger()
 
 
-def configure_service_app(app: FastAPI, *, service_name: str) -> FastAPI:
-    """Attach request-ID middleware, error handlers, and health endpoint."""
+def configure_service_app(
+    app: FastAPI,
+    *,
+    service_name: str,
+    max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
+    rate_limit: int = 240,
+    rate_limit_window_seconds: int = 60,
+    limiter: RateLimiter | None = None,
+) -> FastAPI:
+    """Attach the platform middleware, error handlers, and health endpoint.
+
+    Middleware order matters: Starlette runs the most recently added
+    first, so the security layer is registered *before* the request-ID
+    layer in order to run inside it. That way a request rejected for
+    size or rate still gets a request id on its response and is
+    traceable in the logs.
+    """
+    app.middleware("http")(
+        build_security_middleware(
+            max_body_bytes=max_body_bytes,
+            limiter=limiter,
+            default_limit=rate_limit,
+            default_window_seconds=rate_limit_window_seconds,
+        )
+    )
 
     @app.middleware("http")
     async def request_id_middleware(

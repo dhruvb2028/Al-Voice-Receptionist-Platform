@@ -75,8 +75,16 @@ mypy_path = [
 
 [[tool.mypy.overrides]]
 # boto3 ships no type stubs; the R2 adapter wraps it behind our typed
-# StorageProvider protocol.
-module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+# StorageProvider protocol. google-cloud-secret-manager is an optional
+# deployed-only dependency imported lazily behind SecretBackend.
+module = [
+    "boto3",
+    "boto3.*",
+    "botocore",
+    "botocore.*",
+    "google.cloud",
+    "google.cloud.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

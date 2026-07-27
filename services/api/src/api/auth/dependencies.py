@@ -73,10 +73,16 @@ async def get_claims(request: Request) -> ClerkClaims:
 
 
 async def get_principal(
+    request: Request,
     claims: Annotated[ClerkClaims, Depends(get_claims)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Principal:
     settings = get_settings()
+
+    # Rate limits are charged to the caller's identity rather than their
+    # address, so one tenant behind a shared egress IP cannot exhaust
+    # another's budget. Set as soon as the subject is known.
+    request.state.principal_key = claims.sub
 
     # Platform admin: claim-based, with a configured allowlist fallback.
     is_admin = claims.platform_role == "platform_admin" or (
