@@ -332,6 +332,20 @@ class ConversationEngine:
         )
         return any(keyword in lowered for keyword in keywords)
 
+    def _frustration_detected(self, text: str) -> bool:
+        lowered = text.lower()
+        phrases = (
+            "this is ridiculous",
+            "are you kidding",
+            "useless",
+            "not listening",
+            "you don't understand",
+            "i already told you",
+            "for the third time",
+            "stop wasting my time",
+        )
+        return any(phrase in lowered for phrase in phrases)
+
     def _human_requested(self, text: str) -> bool:
         lowered = text.lower()
         phrases = (
@@ -381,6 +395,11 @@ class ConversationEngine:
             self.machine.data.emergency_detected = True
         if self._human_requested(caller_text):
             self.machine.data.human_requested = True
+        if self._frustration_detected(caller_text):
+            self.machine.data.frustration_score += 1
+            if self.machine.data.frustration_score >= self.config.escalation.frustration_threshold:
+                # A frustrated caller gets a human, not more AI.
+                self.machine.data.human_requested = True
         override = self.machine.check_overrides()
         if override is not None:
             if self.machine.data.emergency_detected:
@@ -484,6 +503,49 @@ class ConversationEngine:
             if escalated:
                 trace.escalation_reason = "intent_failure"
                 reply_text = "Let me connect you with someone who can help. One moment."
+
+        # Scope firewall: the model tried a tool that does not exist —
+        # the question is outside what this receptionist supports, so the
+        # safe path is a message, never a guess.
+        if any(t.status == "rejected" for t in trace.tools):
+            trace.guardrails.append(
+                GuardrailTrace(
+                    guardrail_type="off_scope",
+                    action="rewritten",
+                    detail="unapproved tool invocation redirected to message taking",
+                )
+            )
+            reply_text = (
+                "That's a bit outside what I can help with directly — can I take "
+                "your name and number so the team can call you back?"
+            )
+            if self.machine.state not in (
+                CallState.TAKING_MESSAGE,
+                CallState.TRANSFER_REQUESTED,
+            ):
+                self.machine.transition(CallState.TAKING_MESSAGE)
+
+        # Output guardrails: the reply never reaches the caller without
+        # passing the firewalls. Canned escalation replies above return
+        # early and never carry invented facts.
+        from ai_domain.guardrails import GuardrailContext, GuardrailPipeline
+
+        booking_confirmed = any(
+            t.tool_name == "book_appointment"
+            and t.status == "success"
+            and bool((t.result or {}).get("confirmed"))
+            for t in trace.tools
+        )
+        outcome = GuardrailPipeline().check(
+            reply_text,
+            GuardrailContext(
+                config=self.config,
+                tools=trace.tools,
+                booking_confirmed_this_turn=booking_confirmed,
+            ),
+        )
+        reply_text = outcome.text
+        trace.guardrails.extend(outcome.events)
 
         self._history.append(ChatMessage(role="assistant", content=reply_text))
         trace.reply_text = reply_text

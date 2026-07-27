@@ -20,11 +20,13 @@ from ai_database.enums import (
     CallDirection,
     CallOutcome,
     CallTransport,
+    GuardrailAction,
+    GuardrailType,
     RecordingStatus,
     ToolExecutionStatus,
     TurnRole,
 )
-from ai_database.models import Call, SimulatorSession, ToolExecution, Turn
+from ai_database.models import Call, GuardrailEvent, SimulatorSession, ToolExecution, Turn
 from ai_database.repositories import AdminContext
 from ai_domain.config import ReceptionistConfig
 from ai_domain.conversation import (
@@ -331,6 +333,18 @@ async def process_turn(
     )
     session.add_all([caller_turn, reply_turn])
     await session.flush()
+
+    for guardrail in trace.guardrails:
+        session.add(
+            GuardrailEvent(
+                tenant_id=tenant_id,
+                call_id=call.id,
+                turn_id=reply_turn.id,
+                guardrail_type=GuardrailType(guardrail.guardrail_type),
+                action=GuardrailAction(guardrail.action),
+                input_redacted={"detail": guardrail.detail} if guardrail.detail else None,
+            )
+        )
 
     for tool in trace.tools:
         session.add(

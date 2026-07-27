@@ -125,6 +125,12 @@ class GuardrailType(StrEnum):
     OFF_SCOPE = "off_scope"
     PROMPT_INJECTION = "prompt_injection"
     SENSITIVE_CONTENT = "sensitive_content"
+    BOOKING_CONFIRMATION = "booking_confirmation"
+    EMERGENCY = "emergency"
+    HUMAN_REQUEST = "human_request"
+    SYSTEM_ERROR = "system_error"
+    INTENT_FAILURE = "intent_failure"
+    MAX_DURATION = "max_duration"
 
 
 class GuardrailAction(StrEnum):
