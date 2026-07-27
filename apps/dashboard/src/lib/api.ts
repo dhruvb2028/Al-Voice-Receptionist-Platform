@@ -9,9 +9,20 @@ import "server-only";
 import { auth } from "@clerk/nextjs/server";
 import { serverEnv } from "@/env";
 
+export interface ApiErrorDetail {
+  field?: string;
+  issue: string;
+}
+
 export type ApiResult<T> =
   | { ok: true; data: T }
-  | { ok: false; status: number; code: string; message: string };
+  | {
+      ok: false;
+      status: number;
+      code: string;
+      message: string;
+      details?: ApiErrorDetail[];
+    };
 
 async function getToken(): Promise<string | null> {
   if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) return null;
@@ -61,16 +72,18 @@ export async function apiFetch<T>(
   if (!response.ok) {
     let code = "request_failed";
     let message = "The request failed.";
+    let details: ApiErrorDetail[] | undefined;
     try {
       const body = (await response.json()) as {
-        error?: { code?: string; message?: string };
+        error?: { code?: string; message?: string; details?: ApiErrorDetail[] };
       };
       code = body.error?.code ?? code;
       message = body.error?.message ?? message;
+      details = body.error?.details;
     } catch {
       // non-JSON error body — keep defaults
     }
-    return { ok: false, status: response.status, code, message };
+    return { ok: false, status: response.status, code, message, details };
   }
 
   return { ok: true, data: (await response.json()) as T };
