@@ -42,6 +42,13 @@ async def test_malformed_incoming_request_id_is_replaced(app: FastAPI) -> None:
     assert response.headers["X-Request-ID"].startswith("req_")
 
 
+async def test_readyz_returns_ready(app: FastAPI) -> None:
+    async with _client(app) as client:
+        response = await client.get("/readyz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready", "service": "api"}
+
+
 async def test_unknown_route_returns_json(app: FastAPI) -> None:
     async with _client(app) as client:
         response = await client.get("/does-not-exist")

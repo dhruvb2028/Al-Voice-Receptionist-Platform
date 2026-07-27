@@ -89,4 +89,10 @@ def configure_service_app(app: FastAPI, *, service_name: str) -> FastAPI:
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "service": service_name}
 
+    @app.get("/readyz", include_in_schema=False)
+    async def readyz() -> dict[str, str]:
+        # Startup probe target. Dependency checks (database, redis) attach
+        # here as those clients land; returning 200 means "safe to route".
+        return {"status": "ready", "service": service_name}
+
     return app

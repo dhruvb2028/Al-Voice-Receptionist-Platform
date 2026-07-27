@@ -1,9 +1,10 @@
 name: CI
 
+# Runs directly on pull requests; on main it runs as the quality-gate
+# stage of the staging deploy (workflow_call), avoiding duplicate runs.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
 
 jobs:
   python:
@@ -74,3 +75,6 @@ jobs:
 
       - name: Build worker image
         run: docker build -f services/worker/Dockerfile .
+
+      - name: Build web image
+        run: docker build -f apps/dashboard/Dockerfile apps/dashboard

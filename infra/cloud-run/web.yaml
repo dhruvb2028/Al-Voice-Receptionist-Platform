@@ -1,0 +1,40 @@
+# Cloud Run service definition — Web (Next.js dashboard).
+# Deploy: envsubst < infra/cloud-run/web.yaml | gcloud run services replace -
+# Required substitutions: PROJECT_ID, REGION, ENVIRONMENT, IMAGE
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: receptionist-web-${ENVIRONMENT}
+  labels:
+    app: receptionist
+    component: web
+    environment: ${ENVIRONMENT}
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "3"
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      serviceAccountName: receptionist-web@${PROJECT_ID}.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 60
+      containers:
+        - image: ${IMAGE}
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          env:
+            - name: ENVIRONMENT
+              value: ${ENVIRONMENT}
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            failureThreshold: 10

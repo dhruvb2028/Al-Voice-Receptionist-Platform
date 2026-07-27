@@ -1,0 +1,80 @@
+name: Deploy Production
+
+# Production deploys are manual and gated:
+# - workflow_dispatch only (no automatic trigger)
+# - the GitHub "production" environment requires reviewer approval
+# - migrations NEVER run implicitly: the run_migrations input must be
+#   set to true, and the migration job itself sits behind the approval
+#   gate. A deploy without migrations is the default.
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Git SHA of a staging-verified build to promote"
+        required: true
+      run_migrations:
+        description: "Run database migrations (explicit controlled step)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  REGION: ${{ vars.GCP_REGION }}
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev
+
+jobs:
+  migrate:
+    name: Migration gate (production)
+    if: inputs.run_migrations
+    runs-on: ubuntu-latest
+    environment: production # manual approval required
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.image_tag }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --all-packages
+
+      - name: Run migrations against production
+        env:
+          DATABASE_DIRECT_URL: ${{ secrets.PRODUCTION_DATABASE_DIRECT_URL }}
+        run: uv run alembic upgrade head
+
+  deploy:
+    name: Deploy ${{ matrix.service }} (production)
+    # Runs after the migration job when requested; directly after approval
+    # otherwise. always() + explicit result check keeps the chain correct.
+    needs: [migrate]
+    if: always() && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      matrix:
+        service: [api, voice, worker, web]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.image_tag }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: receptionist-deployer@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Deploy to Cloud Run
+        env:
+          ENVIRONMENT: production
+          IMAGE: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/receptionist/receptionist-${{ matrix.service }}:${{ inputs.image_tag }}
+        run: bash infra/scripts/deploy-service.sh ${{ matrix.service }}

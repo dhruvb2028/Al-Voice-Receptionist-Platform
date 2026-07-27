@@ -1,0 +1,49 @@
+# Cloud Run service definition — API (control plane).
+# Deploy: envsubst < infra/cloud-run/api.yaml | gcloud run services replace -
+# Required substitutions: PROJECT_ID, REGION, ENVIRONMENT, IMAGE, MIN_INSTANCES
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: receptionist-api-${ENVIRONMENT}
+  labels:
+    app: receptionist
+    component: api
+    environment: ${ENVIRONMENT}
+spec:
+  template:
+    metadata:
+      annotations:
+        # dev: 0, staging: 0, production: 1 (webhook latency)
+        autoscaling.knative.dev/minScale: "${MIN_INSTANCES}"
+        autoscaling.knative.dev/maxScale: "3"
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      serviceAccountName: receptionist-api@${PROJECT_ID}.iam.gserviceaccount.com
+      containerConcurrency: 20
+      timeoutSeconds: 60
+      containers:
+        - image: ${IMAGE}
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          env:
+            - name: ENVIRONMENT
+              value: ${ENVIRONMENT}
+          # Secrets (DATABASE_URL, CLERK_SECRET_KEY, ...) are attached by
+          # the deploy script via --set-secrets; never inlined here.
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
