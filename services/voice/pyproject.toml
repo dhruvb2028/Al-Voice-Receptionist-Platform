@@ -1,0 +1,37 @@
+[project]
+name = "voice-service"
+version = "0.1.0"
+description = "Realtime voice orchestrator: media streams, STT, LLM, TTS, conversation state"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "websockets>=13.1",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "redis>=5.2",
+    "httpx>=0.28",
+    "structlog>=24.4",
+    "tenacity>=9.0",
+    "ai-shared",
+    "ai-telemetry",
+    "ai-domain",
+    "ai-database",
+    "ai-providers",
+]
+
+[tool.uv.sources]
+ai-shared = { workspace = true }
+ai-telemetry = { workspace = true }
+ai-domain = { workspace = true }
+ai-database = { workspace = true }
+ai-providers = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/voice"]
