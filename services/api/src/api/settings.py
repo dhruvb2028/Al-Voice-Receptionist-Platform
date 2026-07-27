@@ -26,6 +26,21 @@ class ApiSettings(BaseServiceSettings):
     # fallback to the platform_role JWT claim.
     platform_admin_user_ids: str = ""
 
+    # Google Calendar OAuth
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    google_oauth_redirect_uri: str | None = None
+
+    # Signing key shared with call tokens; also signs OAuth state.
+    call_token_signing_key: str | None = None
+
+    # Application-layer encryption (base64-encoded 32-byte keys).
+    data_encryption_key: str | None = None
+    lookup_hash_key: str | None = None
+
+    # Where OAuth callbacks redirect the admin's browser.
+    dashboard_base_url: str | None = None
+
     @property
     def platform_admin_user_id_list(self) -> frozenset[str]:
         return frozenset(

@@ -12,6 +12,7 @@ from api.db import dispose_engine
 from api.routers.admin import router as admin_router
 from api.routers.admin_config import router as admin_config_router
 from api.routers.admin_simulator import router as admin_simulator_router
+from api.routers.integrations import router as integrations_router
 from api.routers.me import router as me_router
 from api.routers.tenant import router as tenant_router
 from api.settings import get_settings
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.include_router(admin_config_router)
     app.include_router(admin_simulator_router)
+    app.include_router(integrations_router)
     return configure_service_app(app, service_name="api")
 
 
