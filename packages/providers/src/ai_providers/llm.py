@@ -132,6 +132,11 @@ class MockLLMProvider:
     def queue(self, turn: MockTurn) -> None:
         self.turns.append(turn)
 
+    def skip(self, count: int) -> None:
+        """Advance the script cursor (used when replaying a restored
+        session so the next reply continues the script)."""
+        self._cursor += count
+
     async def stream(
         self,
         *,

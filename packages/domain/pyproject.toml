@@ -5,7 +5,12 @@ description = "Domain models and business rules shared by api, voice, and worker
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.9",
+    "structlog>=24.4",
+    "ai-providers",
 ]
+
+[tool.uv.sources]
+ai-providers = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -41,11 +41,17 @@ name = "ai-domain"
 version = "0.1.0"
 source = { editable = "packages/domain" }
 dependencies = [
+    { name = "ai-providers" },
     { name = "pydantic" },
+    { name = "structlog" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.9" }]
+requires-dist = [
+    { name = "ai-providers", editable = "packages/providers" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "structlog", specifier = ">=24.4" },
+]
 
 [[package]]
 name = "ai-providers"
