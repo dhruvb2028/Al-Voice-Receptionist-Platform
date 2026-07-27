@@ -13,6 +13,19 @@ class WorkerSettings(BaseServiceSettings):
     qstash_next_signing_key: str | None = None
     resend_api_key: str | None = None
 
+    # Twilio (recording fetch + provider-copy deletion)
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    #: delete the provider copy once stored in R2
+    delete_provider_recordings: bool = True
+
+    # Cloudflare R2
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket: str | None = None
+    r2_endpoint: str | None = None
+
 
 @lru_cache
 def get_settings() -> WorkerSettings:

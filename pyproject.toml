@@ -54,6 +54,12 @@ show_error_codes = true
 # conftest.py files share a module name across test suites and are
 # fixture-heavy; they are exercised by the tests themselves.
 exclude = ['conftest\.py$']
+
+[[tool.mypy.overrides]]
+# boto3 ships no type stubs; the R2 adapter wraps it behind our typed
+# StorageProvider protocol.
+module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+ignore_missing_imports = true
 mypy_path = [
     "packages/shared/src",
     "packages/telemetry/src",

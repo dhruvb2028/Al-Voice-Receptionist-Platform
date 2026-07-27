@@ -49,6 +49,13 @@ class ApiSettings(BaseServiceSettings):
     #: platform-wide concurrent phone-call cap (2 calls x 3 voice instances)
     max_concurrent_calls: int = 6
 
+    # Cloudflare R2 (signed recording URLs)
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket: str | None = None
+    r2_endpoint: str | None = None
+
     @property
     def platform_admin_user_id_list(self) -> frozenset[str]:
         return frozenset(

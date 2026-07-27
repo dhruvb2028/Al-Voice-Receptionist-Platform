@@ -147,6 +147,8 @@ class TenantConfig(TimestampMixin, Base):
     language: Mapped[str] = mapped_column(String(16), nullable=False, default="en")
     recording_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     recording_consent_text: Mapped[str | None] = mapped_column(Text)
+    #: days recordings are kept (None -> platform default of 30; max 90)
+    recording_retention_days: Mapped[int | None] = mapped_column(Integer)
     escalation_number: Mapped[str | None] = mapped_column(String(20))
     max_call_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=900)
     timezone: Mapped[str | None] = mapped_column(String(64))
@@ -336,6 +338,8 @@ class Call(TimestampMixin, Base):
         default=RecordingStatus.DISABLED,
     )
     recording_object_key: Mapped[str | None] = mapped_column(String(300))
+    # Legal hold exempts a recording from retention deletion.
+    recording_legal_hold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     transcript_status: Mapped[TranscriptStatus] = mapped_column(
         _enum(TranscriptStatus, "transcript_status"),
         nullable=False,

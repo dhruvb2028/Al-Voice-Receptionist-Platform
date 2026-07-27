@@ -157,6 +157,38 @@ async def read_configuration(
     )
 
 
+class RecordingUrlResponse(BaseModel):
+    url: str
+    expires_seconds: int
+
+
+@router.get("/calls/{call_id}/recording-url")
+async def recording_url(
+    call_id: uuid.UUID,
+    principal: Annotated[Principal, Depends(require_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RecordingUrlResponse:
+    """Short-lived signed URL for a call recording (owner and staff).
+
+    Authorization is tenant-scoped; access is audited. No permanent
+    public URLs exist anywhere in the platform.
+    """
+    from api.services.recordings import get_storage, sign_recording_url
+
+    assert principal.tenant_id is not None
+    url = await sign_recording_url(
+        session,
+        call_id=call_id,
+        tenant_id=principal.tenant_id,
+        storage=get_storage(),
+        actor_external_user_id=principal.external_user_id,
+        actor_role=principal.role.value,
+    )
+    if url is None:
+        raise NotFoundError("Not found.")
+    return RecordingUrlResponse(url=url, expires_seconds=900)
+
+
 @router.get("/usage")
 async def read_usage(
     principal: Annotated[Principal, Depends(require_client_owner)],
