@@ -13,6 +13,7 @@ class VoiceSettings(BaseServiceSettings):
     database_url: str | None = None
     deepgram_api_key: str | None = None
     cartesia_api_key: str | None = None
+    call_token_signing_key: str | None = None
 
     # --- Groq LLM (all environment-driven; never hardcoded) ---
     groq_api_key: str | None = None

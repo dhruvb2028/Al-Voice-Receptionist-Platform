@@ -41,6 +41,14 @@ class ApiSettings(BaseServiceSettings):
     # Where OAuth callbacks redirect the admin's browser.
     dashboard_base_url: str | None = None
 
+    # Telephony
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_webhook_base_url: str | None = None
+    voice_ws_base_url: str | None = None
+    #: platform-wide concurrent phone-call cap (2 calls x 3 voice instances)
+    max_concurrent_calls: int = 6
+
     @property
     def platform_admin_user_id_list(self) -> frozenset[str]:
         return frozenset(

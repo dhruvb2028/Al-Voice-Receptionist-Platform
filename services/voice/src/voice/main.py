@@ -40,6 +40,9 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url=None,
     )
+    from voice.media_ws import register_media_ws
+
+    register_media_ws(app, signing_key_getter=lambda: get_settings().call_token_signing_key)
     return configure_service_app(app, service_name="voice")
 
 
