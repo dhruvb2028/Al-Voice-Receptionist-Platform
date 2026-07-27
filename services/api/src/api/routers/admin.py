@@ -30,6 +30,7 @@ from api.schemas.admin_tenants import (
 )
 from api.services import tenant_admin
 from api.services.calls import CallDetail, CallListFilters, CallListPage, call_detail, list_calls
+from api.services.health import SystemHealth, system_health
 from api.services.metrics import (
     PlatformOverview,
     TenantOverview,
@@ -177,6 +178,15 @@ async def begin_testing(
         session, tenant_id=tenant_id, target=TenantStatus.TESTING, context=context
     )
     return LifecycleActionResponse(id=tenant.id, status=tenant.status.value)
+
+
+@router.get("/system-health")
+async def read_system_health(
+    context: Annotated[AdminContext, Depends(require_platform_admin)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> SystemHealth:
+    """Live alert evaluation for the operations console."""
+    return await system_health(session, max_concurrent_calls=get_settings().max_concurrent_calls)
 
 
 @router.get("/overview")

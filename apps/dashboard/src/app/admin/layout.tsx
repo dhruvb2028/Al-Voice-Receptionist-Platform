@@ -31,6 +31,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             Tenants
           </Link>
+          <Link
+            href="/admin/system-health"
+            className="block rounded-md px-2 py-1.5 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted"
+          >
+            System health
+          </Link>
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

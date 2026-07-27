@@ -380,3 +380,32 @@ export interface PlatformOverview {
   provider_errors_today: SeriesPoint[];
   readiness_warnings: TenantWarning[];
 }
+
+// --- System health (mirror api/services/health.py) --------------------------
+
+export interface AlertStatus {
+  key: string;
+  title: string;
+  severity: "ok" | "warning" | "critical";
+  value: number;
+  warning_at: number;
+  critical_at: number;
+  unit: string;
+  window_minutes: number;
+  runbook: string;
+  detail: string;
+}
+
+export interface TenantFailure {
+  tenant_id: string;
+  tenant_name: string;
+  failed_calls: number;
+}
+
+export interface SystemHealth {
+  checked_at: string;
+  overall: "ok" | "warning" | "critical";
+  alerts: AlertStatus[];
+  tenant_failures: TenantFailure[];
+  database_latency_ms: number;
+}

@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 import structlog
 from ai_shared.fastapi_setup import configure_service_app
-from ai_telemetry import configure_logging
+from ai_telemetry import configure_observability
 from fastapi import FastAPI
 
 from voice.settings import get_settings
@@ -20,10 +20,12 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
-    configure_logging(
+    configure_observability(
         service_name=settings.service_name,
         log_level=settings.log_level,
-        json_output=settings.environment.value != "local",
+        environment=settings.environment.value,
+        sentry_dsn=settings.sentry_dsn,
+        sentry_release=settings.sentry_release,
     )
     logger.info("service_starting", environment=settings.environment.value)
     yield

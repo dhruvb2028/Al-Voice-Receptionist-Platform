@@ -84,6 +84,8 @@ module = [
     "botocore.*",
     "google.cloud",
     "google.cloud.*",
+    "sentry_sdk",
+    "sentry_sdk.*",
 ]
 ignore_missing_imports = true
 
