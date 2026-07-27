@@ -148,3 +148,70 @@ async def test_message_saved_encrypted_with_urgency(
     assert "after 5 PM" in body
     assert "heat pumps" in body
     assert "water heater" not in row.body_encrypted
+
+
+async def test_booking_concurrent_same_key_creates_exactly_one_row(
+    migrated_database: str,
+) -> None:
+    """Two callers racing on the same idempotency key.
+
+    The domain-level test covers this with mocks; this one runs the race
+    against a real database on separate connections, which is where the
+    unique constraint actually decides the winner. Without it, a retried
+    webhook could double-book a slot.
+
+    The tenant is committed rather than taken from the rolled-back
+    ``db_session`` fixture — separate connections cannot see an
+    uncommitted row, so the race would fail on a foreign key instead of
+    on the constraint under test.
+    """
+    import asyncio
+
+    from ai_database import create_engine, create_session_factory
+    from ai_database.models import Tenant
+
+    crypto = _crypto()
+    key = f"race-{uuid.uuid4().hex[:8]}"
+    slug = f"race-{uuid.uuid4().hex[:8]}"
+    engine = create_engine(migrated_database)
+    factory = create_session_factory(engine)
+
+    async with factory() as session, session.begin():
+        tenant = Tenant(name="Race Tenant", slug=slug)
+        session.add(tenant)
+        await session.flush()
+        tenant_id = tenant.id
+
+    async def attempt() -> str:
+        async with factory() as session, session.begin():
+            persistence = SqlBookingPersistence(
+                session, tenant_id=tenant_id, call_id=None, crypto=crypto
+            )
+            record = await persistence.create_pending(idempotency_key=key, **_booking_kwargs())
+            return record.booking_id
+
+    results = await asyncio.gather(*(attempt() for _ in range(4)), return_exceptions=True)
+
+    try:
+        async with factory() as session:
+            rows = (
+                (await session.execute(select(Booking).where(Booking.idempotency_key == key)))
+                .scalars()
+                .all()
+            )
+
+        # Exactly one booking exists, and every attempt that returned a
+        # value points at it — a caller is never told "booked" about a
+        # row that does not exist.
+        assert len(rows) == 1
+        booking_id = str(rows[0].id)
+        returned = [r for r in results if isinstance(r, str)]
+        assert returned, f"every attempt failed: {results}"
+        assert set(returned) == {booking_id}
+    finally:
+        async with factory() as session, session.begin():
+            await session.execute(
+                Booking.__table__.delete().where(Booking.idempotency_key == key)
+            )
+            await session.execute(Tenant.__table__.delete().where(Tenant.id == tenant_id))
+        await engine.dispose()
