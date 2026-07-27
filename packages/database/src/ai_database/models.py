@@ -42,6 +42,7 @@ from ai_database.enums import (
     CalendarConnectionStatus,
     CallDirection,
     CallOutcome,
+    CallTransport,
     ConfigVersionState,
     DeliveryStatus,
     EscalationReason,
@@ -319,6 +320,9 @@ class Call(TimestampMixin, Base):
     to_number: Mapped[str] = mapped_column(String(20), nullable=False)
     direction: Mapped[CallDirection] = mapped_column(
         _enum(CallDirection, "call_direction"), nullable=False, default=CallDirection.INBOUND
+    )
+    transport: Mapped[CallTransport] = mapped_column(
+        _enum(CallTransport, "call_transport"), nullable=False, default=CallTransport.PHONE
     )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -683,3 +687,28 @@ class ConfigVersion(TimestampMixin, Base):
         ),
         Index("ix_config_versions_tenant_id", "tenant_id"),
     )
+
+
+class SimulatorSession(TimestampMixin, Base):
+    """Browser test-console session state.
+
+    One row per simulator call; failure flags configure injected faults
+    the engine and tools honor on subsequent turns. Simulator calls are
+    flagged by calls.transport = browser_text and excluded from client
+    dashboards and usage.
+    """
+
+    __tablename__ = "simulator_sessions"
+
+    call_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("calls.id", ondelete="CASCADE"), primary_key=True
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    created_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    failure_flags: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    engine_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_simulator_sessions_tenant_id", "tenant_id"),)

@@ -154,3 +154,8 @@ class ConfigVersionState(StrEnum):
     ACTIVE = "active"
     SUPERSEDED = "superseded"
     REJECTED = "rejected"
+
+
+class CallTransport(StrEnum):
+    PHONE = "phone"
+    BROWSER_TEXT = "browser_text"

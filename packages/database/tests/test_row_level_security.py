@@ -45,6 +45,9 @@ async def rls_setup(migrated_database: str) -> AsyncIterator[tuple[str, uuid.UUI
         # Always (re)set login + password: the role may exist from a prior
         # run with different credentials.
         await conn.execute(text("ALTER ROLE app_rls_test WITH LOGIN PASSWORD 'rlstest'"))
+        # Schema USAGE must be granted explicitly: a recreated public
+        # schema is owner-only by default.
+        await conn.execute(text("GRANT USAGE ON SCHEMA public TO app_rls_test"))
         await conn.execute(
             text(
                 "GRANT SELECT, INSERT, UPDATE, DELETE "
