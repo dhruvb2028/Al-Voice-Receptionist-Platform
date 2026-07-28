@@ -289,3 +289,41 @@ async def test_bypass_confirmation_attempt() -> None:
         turns=[MockTurn(text="Fine — you're booked!")],
     )
     assert trace.reply_text == CONFIRMATION_DEFLECTION
+
+
+# --- concessions -------------------------------------------------------------
+
+
+def test_percentage_discount_is_blocked() -> None:
+    """A discount commits the business to a price without naming one, so
+    the currency pattern alone would let it through."""
+    outcome = _check("Okay, I can do 20% off for you today!")
+    assert outcome.blocked
+    assert any(g.guardrail_type == "price_invention" for g in outcome.events)
+
+
+def test_spelled_out_percentage_discount_is_blocked() -> None:
+    assert _check("I can give you 15 percent off that.").blocked
+
+
+def test_half_price_is_blocked() -> None:
+    assert _check("We can do it half price this week.").blocked
+
+
+def test_free_extras_are_blocked() -> None:
+    assert _check("I'll throw in a free inspection at no charge.").blocked
+    assert _check("We'll waive the callout fee for you.").blocked
+    assert _check("That one's on the house.").blocked
+
+
+def test_refusing_a_discount_still_works() -> None:
+    """The important false positive: declining is correct behaviour and
+    must not be rewritten into a deflection."""
+    outcome = _check("I'm not able to offer a discount, but I can have someone call you back.")
+    assert not outcome.blocked
+
+
+def test_ordinary_reply_mentioning_free_time_is_not_blocked() -> None:
+    """'free' in a scheduling sense is not a concession."""
+    assert not _check("Let me see when we have someone free.").blocked
+    assert not _check("Feel free to call back any time.").blocked

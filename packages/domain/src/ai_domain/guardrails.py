@@ -45,6 +45,27 @@ _CURRENCY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Concessions the receptionist has no authority to grant. A discount is
+# a price commitment even though no currency amount is spoken, so
+# _CURRENCY_RE alone would let "20% off" through.
+#
+# Deliberately narrow: these match *granting* a concession, not refusing
+# one. "I'm not able to offer a discount" is correct behaviour and must
+# keep working, so a bare mention of "discount" is not enough to fire.
+_CONCESSION_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"\b[0-9]{1,2}\s*%\s*(?:off|discount)\b",
+        r"\b[0-9]{1,2}\s*percent\s*(?:off|discount)\b",
+        r"\bhalf[\s-]price\b",
+        r"\b(?:for|at\s+no)\s+free\b|\bfree\s+of\s+charge\b|\bno\s+charge\b",
+        # Allows a qualifier: "waive the callout fee".
+        r"\bwaive\s+(?:the\s+)?(?:\w+\s+){0,2}(?:fee|charge|cost)s?\b",
+        r"\bthrow\s+in\s+(?:a|an|the)\b",
+        r"\bon\s+the\s+house\b",
+    )
+)
+
 # Phrases implying a completed booking.
 _CONFIRMATION_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
@@ -158,6 +179,22 @@ class GuardrailPipeline:
         return found
 
     def _price_firewall(self, outcome: GuardrailOutcome, context: GuardrailContext) -> None:
+        # A concession commits the business to a price without ever
+        # naming one, so it is checked before the amount comparison.
+        concession = next((p.pattern for p in _CONCESSION_PATTERNS if p.search(outcome.text)), None)
+        if concession is not None:
+            outcome.events.append(
+                GuardrailTrace(
+                    guardrail_type="price_invention",
+                    action="rewritten",
+                    detail="blocked an unauthorised concession",
+                )
+            )
+            outcome.text = PRICE_DEFLECTION
+            outcome.blocked = True
+            logger.warning("guardrail_blocked_concession")
+            return
+
         amounts = _amounts_in(outcome.text)
         if not amounts:
             return

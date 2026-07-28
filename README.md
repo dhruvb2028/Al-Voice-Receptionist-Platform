@@ -11,6 +11,31 @@ messages, and puts genuine emergencies straight through to a human.
 > account of what is proven and what is not. No customers, no revenue,
 > and no real call metrics are claimed anywhere in this repository.
 
+## See it work in 30 seconds
+
+No credentials, no database, no network:
+
+```bash
+uv sync --all-packages && uv run python demo.py
+```
+
+Six turns through the **real** conversation engine, state machine, and
+guardrail pipeline — only the model and audio are mocked. The model is
+deliberately scripted to misbehave: it tries to invent a price, grant a
+discount, obey an injected instruction, and confirm a booking that never
+happened.
+
+```
+   Caller          How much to unblock a drain?
+   Model wanted    It's just $49 flat, and I can throw in a free inspection.
+   Guardrail       price_invention -> rewritten
+   Receptionist    BLOCKED The team will confirm the exact price after reviewing the job.
+```
+
+Five of six turns get stopped. That is the thing this project is
+actually about: **the model proposes, and something deterministic
+decides.**
+
 ---
 
 ## The problem
@@ -289,7 +314,7 @@ cd apps/dashboard && npm install && npm run dev
 ### Quality gate
 
 ```bash
-uv run ruff check . && uv run ruff format --check . && uv run mypy packages services && uv run pytest -q
+uv run ruff check . && uv run ruff format --check . && uv run mypy packages services demo.py && uv run pytest -q
 ```
 
 mypy runs in strict mode across every package and service.

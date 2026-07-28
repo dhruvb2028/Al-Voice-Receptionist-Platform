@@ -8,7 +8,7 @@ if it is implemented *and* covered by a test that would fail if it broke.
 Everything implemented but unverified against a real provider is listed
 separately, because the difference is the whole point of this document.
 
-Audited at commit `9449af2`. Re-run the validation set below before
+Figures below are from the latest commit on `main`. Re-run the validation set below before
 trusting these figures again.
 
 ---
@@ -28,9 +28,9 @@ The gap is credentials and one supervised test call, not code.
 
 | | |
 |---|---|
-| Backend tests | **599 passing** |
+| Backend tests | **605 passing** |
 | Evaluation cases | **64 passing, 0 safety failures** (32 required scenarios covered) |
-| Type checking | mypy strict, **0 errors** across 150 source files |
+| Type checking | mypy strict, **0 errors** across 151 source files |
 | Linting | ruff, **clean** |
 | Frontend | lint clean, typecheck clean, production build succeeds |
 | Migrations | **10**, single head, applies to an empty database |
@@ -197,7 +197,7 @@ account:
 Run all of it before any production change.
 
 ```bash
-uv run ruff check . && uv run ruff format --check . && uv run mypy packages services && uv run pytest -q
+uv run ruff check . && uv run ruff format --check . && uv run mypy packages services demo.py && uv run pytest -q
 ```
 
 ```bash
