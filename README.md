@@ -358,6 +358,7 @@ Stated plainly, with the scale at which each stops being acceptable:
 | | |
 |---|---|
 | [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) | What is verified vs merely built |
+| [delivery/](delivery/README.md) | **Client-facing handover pack** — send as-is |
 | [docs/system-architecture.md](docs/system-architecture.md) | Full architecture |
 | [docs/database.md](docs/database.md) | Schema and data model |
 | [docs/call-lifecycle.md](docs/call-lifecycle.md) | A call, end to end |
