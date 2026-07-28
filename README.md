@@ -311,6 +311,11 @@ Dashboard:
 cd apps/dashboard && npm install && npm run dev
 ```
 
+To run it with **real data** — a seeded business with call history,
+signed in through a real Clerk dev instance — follow
+[docs/local-dashboard.md](docs/local-dashboard.md). About ten minutes,
+and it uses the production auth path rather than a bypass.
+
 ### Quality gate
 
 ```bash
@@ -397,4 +402,5 @@ Stated plainly, with the scale at which each stops being acceptable:
 | [docs/monitoring.md](docs/monitoring.md) | Metrics and alerts |
 | [docs/deployment.md](docs/deployment.md) · [docs/rollback.md](docs/rollback.md) | Shipping |
 | [docs/client-onboarding.md](docs/client-onboarding.md) · [docs/support.md](docs/support.md) | Operations |
+| [docs/local-dashboard.md](docs/local-dashboard.md) | Running the dashboard locally with real data |
 | [docs/incident-response.md](docs/incident-response.md) | When it breaks |
